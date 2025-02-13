@@ -1,0 +1,25 @@
+llm:
+  active: ali_qwen  # 可选 ali_qwen | openai | claude
+  params:
+    ali_qwen:
+      api_key: "sk-ac6676f765124b9dafbf47a3cb9c99a9"
+      version: "qwen-max-2025-01-25"
+    openai:
+      api_key: "sk-xxx"
+      model: "gpt-4"
+      
+character:
+  personality_path: "./character/persona_config.yaml"
+  memory_size: 20 
+  memory_path: "./backend/Memory"  # 添加记忆存储路径
+
+performance:
+  use_gpu: false
+  max_text_length: 512
+  sentiment_model: "distilbert-base-multilingual-cased-sentiments-student" 
+
+rate_limit:
+  max_requests: 100
+  interval: 60
+  ban_duration: 300 
+
