@@ -1,0 +1,106 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>AI女友聊天</title>
+    <style>
+        #chat-container {
+            width: 600px;
+            height: 400px;
+            border: 1px solid #ccc;
+            margin: 20px auto;
+            padding: 20px;
+            overflow-y: auto;
+        }
+        #input-container {
+            width: 600px;
+            margin: 20px auto;
+            display: flex;
+        }
+        #message-input {
+            flex: 1;
+            padding: 10px;
+        }
+        #send-button {
+            padding: 10px 20px;
+            margin-left: 10px;
+        }
+        .message {
+            margin: 10px 0;
+            padding: 10px;
+            border-radius: 5px;
+        }
+        .user-message {
+            background-color: #e3f2fd;
+            margin-left: 20%;
+        }
+        .bot-message {
+            background-color: #f5f5f5;
+            margin-right: 20%;
+        }
+    </style>
+</head>
+<body>
+    <div id="chat-container"></div>
+    <div id="input-container">
+        <input type="text" id="message-input" placeholder="输入消息...">
+        <button id="send-button">发送</button>
+    </div>
+
+    <script>
+        const chatContainer = document.getElementById('chat-container');
+        const messageInput = document.getElementById('message-input');
+        const sendButton = document.getElementById('send-button');
+        
+        // 创建WebSocket连接
+        const ws = new WebSocket('ws://localhost:9001/chat');
+        
+        ws.onopen = () => {
+            appendMessage('系统', '连接成功！', 'bot-message');
+        };
+        
+        ws.onmessage = (event) => {
+            appendMessage('小爱', event.data, 'bot-message');
+        };
+        
+        ws.onerror = (error) => {
+            console.error('WebSocket错误:', error);
+            appendMessage('系统', '连接错误！', 'bot-message');
+        };
+        
+        // 发送消息
+        function sendMessage() {
+            const message = messageInput.value.trim();
+            if (message && ws.readyState === WebSocket.OPEN) {
+                const payload = {
+                    id: Date.now(),
+                    category: '私聊', // 默认私聊
+                    friend_name: '默认好友', // 需要添加好友名称
+                    group_name: null,
+                    text: message,
+                    image: null
+                };
+                ws.send(JSON.stringify(payload));
+                appendMessage('我', message, 'user-message');
+                messageInput.value = '';
+            }
+        }
+        
+        // 添加消息到聊天界面
+        function appendMessage(sender, text, className) {
+            const messageDiv = document.createElement('div');
+            messageDiv.className = `message ${className}`;
+            messageDiv.textContent = `${sender}: ${text}`;
+            chatContainer.appendChild(messageDiv);
+            chatContainer.scrollTop = chatContainer.scrollHeight;
+        }
+        
+        // 绑定事件
+        sendButton.onclick = sendMessage;
+        messageInput.onkeypress = (e) => {
+            if (e.key === 'Enter') {
+                sendMessage();
+            }
+        };
+    </script>
+</body>
+</html>
