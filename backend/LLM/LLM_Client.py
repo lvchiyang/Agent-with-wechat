@@ -1,11 +1,12 @@
-from backend.LLM.AliyunLLM import AliyunLLM
-from backend.LLM.prompt_manager import PromptManager
-import yaml
+import sys
 from pathlib import Path
+import yaml
 from typing import List, Dict
-import json
-from backend.LLM.aliyun_embedding import AliyunMultimodalEmbedding
-
+import asyncio
+from AliyunLLM import AliyunLLM
+from prompt_manager import PromptManager
+from aliyun_embedding import AliyunMultimodalEmbedding
+import platform
 '''
 这个文件是用来处理大模型的，包括初始化大模型、获取embedding、调用大模型进行对话
 我希望在这个代码当中进行一个封装：
@@ -27,6 +28,10 @@ AliyunMultimodalEmbedding支持的message最长只能占512个token，太多就�
     ]
 }
 '''
+
+# 添加项目根目录到sys.path
+BASE_DIR = Path(__file__).resolve().parent.parent
+sys.path.append(str(BASE_DIR))
 
 class LLM_Client:
     def __init__(self):
@@ -50,26 +55,49 @@ class LLM_Client:
             model_version=config["llm"]["params"]["ali_qwen"]["version"]
         )
 
-    async def chat(self, messages: List[Dict[str, str]], temperature: float = 0.7) -> str:
+    async def chat(
+        self,
+        user_input: str,
+        enable_search: bool = False,
+        system_prompt: str = "你是一个有帮助的AI助手。"
+    ) -> str:
         """
         调用大模型进行对话
         
         Args:
-            messages: 对话历史，格式为[{"role": "user", "content": "你好"}, ...]
-            temperature: 温度参数，控制回复的随机性，范围0-1
+            user_input: 用户输入内容
+            enable_search: 是否启用联网搜索
+            system_prompt: 系统提示词，默认为"你是一个有帮助的AI助手。"
             
         Returns:
             str: 模型的回复内容
         """
-
-        # 这里需要使用正则表达式进行解析，如果message当中有```json，那么就按照json格式进行解析，否则就按照普通文本进行解析
-        # 如果message当中有```json，那么就按照json格式进行解析，否则就按照普通文本进行解析
-        for message in messages:
-            if "```json" in message["content"]:
-                message["content"] = json.loads(message["content"]) 
-
+        messages = [
+            {"role": "system", "content": system_prompt},
+            {"role": "user", "content": user_input},
+        ]
         return await self.llm.chat(
             messages=messages,
-            temperature=temperature
+            enable_search=enable_search
         )
 
+# 使用示例
+async def test_chat():
+    # 初始化LLM客户端
+    llm_client = LLM_Client()
+    
+    system_prompt = "你是一个有帮助的AI助手。"
+    # 测试对话
+    user_input = "中国队在亚冬会获得了多少枚金牌"
+    
+    try:
+        response = await llm_client.chat(system_prompt = system_prompt, user_input=user_input, enable_search=True)
+        print("AI回复:", response)
+    except Exception as e:
+        print("错误:", str(e))
+
+if __name__ == "__main__":
+    # 运行测试
+    if platform.system() == "Windows":
+        asyncio.set_event_loop_policy(asyncio.WindowsSelectorEventLoopPolicy())
+    asyncio.run(test_chat())

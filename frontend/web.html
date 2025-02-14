@@ -1,56 +1,196 @@
 <!DOCTYPE html>
 <html>
 <head>
-    <title>AI女友聊天</title>
+    <title>AI 聊天助手</title>
     <style>
-        #chat-container {
-            width: 600px;
-            height: 400px;
-            border: 1px solid #ccc;
-            margin: 20px auto;
-            padding: 20px;
-            overflow-y: auto;
-        }
-        #input-container {
-            width: 600px;
-            margin: 20px auto;
+        body {
+            margin: 0;
+            padding: 0;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background-image: url('camperVan.jpg');
+            background-size: cover;
+            background-position: center;
+            background-attachment: fixed;
+            min-height: 100vh;
             display: flex;
+            justify-content: center;
+            align-items: center;
         }
-        #message-input {
-            flex: 1;
-            padding: 10px;
+
+        .chat-container {
+            width: 500px;
+            background: rgba(255, 255, 255, 0.9);
+            border-radius: 15px;
+            box-shadow: 0 0 20px rgba(0, 0, 0, 0.2);
+            overflow: hidden;
+            backdrop-filter: blur(10px);
         }
-        #send-button {
-            padding: 10px 20px;
-            margin-left: 10px;
+
+        .chat-header {
+            background: linear-gradient(135deg, #6a11cb, #2575fc);
+            color: white;
+            padding: 20px;
+            text-align: center;
         }
+
+        .chat-header h2 {
+            margin: 0;
+            font-size: 24px;
+        }
+
+        .settings {
+            margin-top: 15px;
+        }
+
+        .settings label {
+            display: block;
+            margin: 8px 0;
+            font-size: 14px;
+        }
+
+        .settings input, .settings select {
+            width: 100%;
+            padding: 8px;
+            border: 1px solid #ddd;
+            border-radius: 5px;
+            box-sizing: border-box;
+            margin-bottom: 10px;
+        }
+
+        .chat-body {
+            height: 300px;
+            overflow-y: auto;
+            padding: 15px;
+            background-color: rgba(255, 255, 255, 0.8);
+        }
+
         .message {
             margin: 10px 0;
-            padding: 10px;
-            border-radius: 5px;
+            padding: 10px 15px;
+            border-radius: 15px;
+            max-width: 80%;
+            word-wrap: break-word;
         }
+
         .user-message {
-            background-color: #e3f2fd;
-            margin-left: 20%;
+            background-color: #6a11cb;
+            color: white;
+            margin-left: auto;
         }
+
         .bot-message {
-            background-color: #f5f5f5;
-            margin-right: 20%;
+            background-color: #f1f1f1;
+            margin-right: auto;
+        }
+
+        .chat-footer {
+            padding: 15px;
+            background-color: rgba(255, 255, 255, 0.9);
+            border-top: 1px solid #eee;
+        }
+
+        #messageInput {
+            width: 100%;
+            height: 60px;
+            padding: 10px;
+            border: 1px solid #ddd;
+            border-radius: 8px;
+            box-sizing: border-box;
+            resize: none;
+            margin-bottom: 10px;
+        }
+
+        button {
+            width: 100%;
+            padding: 12px;
+            background: linear-gradient(135deg, #6a11cb, #2575fc);
+            color: white;
+            border: none;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 16px;
+            transition: all 0.3s ease;
+        }
+
+        button:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 5px 15px rgba(0, 0, 0, 0.2);
+        }
+
+        /* 滚动条样式 */
+        .chat-body::-webkit-scrollbar {
+            width: 8px;
+        }
+
+        .chat-body::-webkit-scrollbar-track {
+            background: #f1f1f1;
+            border-radius: 4px;
+        }
+
+        .chat-body::-webkit-scrollbar-thumb {
+            background: #888;
+            border-radius: 4px;
+        }
+
+        .chat-body::-webkit-scrollbar-thumb:hover {
+            background: #555;
         }
     </style>
 </head>
 <body>
-    <div id="chat-container"></div>
-    <div id="input-container">
-        <input type="text" id="message-input" placeholder="输入消息...">
-        <button id="send-button">发送</button>
+    <div class="chat-container">
+        <div class="chat-header">
+            <h2>AI 聊天助手</h2>
+            <div class="settings">
+                <label for="friendName">好友名称:</label>
+                <input type="text" id="friendName" value="用户A">
+                
+                <label for="chatType">聊天类型:</label>
+                <select id="chatType">
+                    <option value="私聊">私聊</option>
+                    <option value="群聊">群聊</option>
+                </select>
+
+                <div id="groupNameContainer" style="display: none;">
+                    <label for="groupName">群组名称:</label>
+                    <input type="text" id="groupName" value="测试群组">
+                </div>
+            </div>
+        </div>
+        
+        <div class="chat-body" id="chatMessages">
+            <!-- 消息将显示在这里 -->
+        </div>
+        
+        <div class="chat-footer">
+            <textarea id="messageInput" placeholder="输入消息..."></textarea>
+            <button onclick="sendMessage()">发送</button>
+        </div>
     </div>
 
     <script>
-        const chatContainer = document.getElementById('chat-container');
-        const messageInput = document.getElementById('message-input');
-        const sendButton = document.getElementById('send-button');
-        
+        // 默认设置
+        const defaultSettings = {
+            friendName: "用户A",
+            chatType: "私聊",
+            groupName: "测试群组"
+        };
+
+        // 初始化设置
+        function initSettings() {
+            document.getElementById('friendName').value = defaultSettings.friendName;
+            document.getElementById('chatType').value = defaultSettings.chatType;
+            document.getElementById('groupName').value = defaultSettings.groupName;
+            updateGroupNameVisibility();
+        }
+
+        // 更新群组名称输入框的可见性
+        function updateGroupNameVisibility() {
+            const chatType = document.getElementById('chatType').value;
+            const groupNameContainer = document.getElementById('groupNameContainer');
+            groupNameContainer.style.display = chatType === '群聊' ? 'block' : 'none';
+        }
+
         // 创建WebSocket连接
         const ws = new WebSocket('ws://localhost:9001/chat');
         
@@ -59,48 +199,58 @@
         };
         
         ws.onmessage = (event) => {
-            appendMessage('小爱', event.data, 'bot-message');
+            const response = JSON.parse(event.data);
+            if (response.type === 'system') {
+                appendMessage('系统', response.message, 'bot-message');
+            } else {
+                appendMessage('小爱', response.text, 'bot-message');
+            }
         };
         
         ws.onerror = (error) => {
             console.error('WebSocket错误:', error);
             appendMessage('系统', '连接错误！', 'bot-message');
         };
-        
+
         // 发送消息
         function sendMessage() {
-            const message = messageInput.value.trim();
-            if (message && ws.readyState === WebSocket.OPEN) {
-                const payload = {
-                    id: Date.now(),
-                    category: '私聊', // 默认私聊
-                    friend_name: '默认好友', // 需要添加好友名称
-                    group_name: null,
-                    text: message,
-                    image: null
-                };
-                ws.send(JSON.stringify(payload));
-                appendMessage('我', message, 'user-message');
-                messageInput.value = '';
+            const message = {
+                id: Date.now().toString(),
+                category: document.getElementById('chatType').value,
+                friend_name: document.getElementById('friendName').value,
+                group_name: document.getElementById('groupName').value || null,
+                text: document.getElementById('messageInput').value,
+                image: null
+            };
+            
+            if (message.text.trim() && ws.readyState === WebSocket.OPEN) {
+                ws.send(JSON.stringify(message));
+                appendMessage('我', message.text, 'user-message');
+                document.getElementById('messageInput').value = '';
             }
         }
-        
+
         // 添加消息到聊天界面
         function appendMessage(sender, text, className) {
             const messageDiv = document.createElement('div');
             messageDiv.className = `message ${className}`;
             messageDiv.textContent = `${sender}: ${text}`;
-            chatContainer.appendChild(messageDiv);
-            chatContainer.scrollTop = chatContainer.scrollHeight;
+            document.getElementById('chatMessages').appendChild(messageDiv);
+            const chatBody = document.querySelector('.chat-body');
+            chatBody.scrollTop = chatBody.scrollHeight;
         }
-        
+
         // 绑定事件
-        sendButton.onclick = sendMessage;
-        messageInput.onkeypress = (e) => {
-            if (e.key === 'Enter') {
+        document.getElementById('chatType').addEventListener('change', updateGroupNameVisibility);
+        document.getElementById('messageInput').addEventListener('keypress', (e) => {
+            if (e.key === 'Enter' && !e.shiftKey) {
+                e.preventDefault();
                 sendMessage();
             }
-        };
+        });
+
+        // 初始化
+        initSettings();
     </script>
 </body>
 </html>

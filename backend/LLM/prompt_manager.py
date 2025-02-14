@@ -30,7 +30,7 @@ class PromptManager:
     def get_memory_prompt(self, message: str):
         return f"""记忆：{self.get_system_prompt() + message}"""
     
-    def get_context_prompt(self, message: str, related_memories: List[Dict], context: str):
+    def get_system_prompt(self, related_memories: List[Dict], context: List[Dict], current_state: str):
         # 构建上下文提示
         context_prompt = f"""
         上下文：
@@ -39,8 +39,8 @@ class PromptManager:
         相关记忆：
         {related_memories}
 
-        用户消息：
-        {message}
+        当前你正在做的事情：
+        {current_state}
 
         回复规则：
         1. 回复控制在15字以内

@@ -6,7 +6,12 @@ from fastapi import WebSocket
 from backend.LLM.LLM_Client import LLM_Client
 from backend.LLM.prompt_manager import PromptManager
 from backend.plugins.rate_limiter import RateLimiter
+from backend.plugins.get_time import get_current_time
 import logging
+import json
+from typing import Optional
+from fastapi import WebSocketDisconnect
+import asyncio
 
 logger = logging.getLogger(__name__)
 '''
@@ -23,37 +28,54 @@ logger = logging.getLogger(__name__)
 class WebSocketHandler:
     def __init__(self, message_callback=True):
         self.message_callback = message_callback
-        # self.LLM_Client = LLM_Client()
         self.prompt_manager = PromptManager()
         self.websocket = None
-        self.should_continue = True  # 添加控制循环的变量
+        self.should_continue = True
+        self.chat_server = None
 
     async def handle_connection(self, websocket: WebSocket):
         await websocket.accept()
         self.websocket = websocket
         
         try:
-            while self.should_continue:  # 使用变量控制循环
-                # 接收用户消息
-                message = await websocket.receive_text()
+            while self.should_continue:
+                # 接收并解析消息
+                message_str = await websocket.receive_text()
+                message = self.chat_server._parse_message(message_str)  # 使用ChatServer的解析方法
                 
+                if not message:
+                    await websocket.send_text(json.dumps({
+                        "type": "system",
+                        "status": "error",
+                        "message": "无效的消息格式"
+                    }))
+                    continue
+                    
+                # 处理有效消息
                 if self.message_callback:
-                    print(f"收到消息: {message}")
-                    
-                    # response = await self.message_callback(message)
-                    # await websocket.send_text(response) # 等Agent处理完
-                else:
-                    await websocket.send_text("No message handler configured")
-                    
+                    response = await self.message_callback(message)
+                    await websocket.send_text(response)
+
         except Exception as e:
-            print(f"Error: {e}")
-            await websocket.send_text(f"系统错误: {str(e)}")
+            logger.error(f"连接处理错误: {str(e)}")
+            await websocket.send_text(json.dumps({
+                "type": "system",
+                "status": "error",
+                "message": f"系统错误: {str(e)}"
+            }))
         finally:
             await websocket.close()
 
     def stop_connections(self):
         """停止所有连接的循环"""
         self.should_continue = False
+        if self.websocket:
+            try:
+                asyncio.get_event_loop().run_until_complete(
+                    self.websocket.close(code=1000, reason="Server shutdown")
+                )
+            except Exception as e:
+                logger.error(f"关闭WebSocket连接时出错: {str(e)}")
 
 class ChatServer:
     def __init__(self):
@@ -64,6 +86,7 @@ class ChatServer:
             ban_duration=300
         )
         self.websocket_handler = WebSocketHandler()
+        self.websocket_handler.chat_server = self  # 传递ChatServer实例
         self._setup()
         self.server = None  # 添加server实例引用
         self.should_stop = False  # 添加停止标志
@@ -81,17 +104,59 @@ class ChatServer:
         # 注册WebSocket路由
         @self.app.websocket("/chat")
         async def websocket_endpoint(websocket: WebSocket):
-            # 如果服务正在停止，拒绝新连接
-            if self.should_stop:
-                await websocket.close(code=1008, reason="Server is shutting down")
-                return
-                
-            # 速率限制检查
-            if self.rate_limiter.is_rate_limited(websocket):
-                await websocket.close(code=1008, reason="Rate limit exceeded")
-                return
-                
-            await self.websocket_handler.handle_connection(websocket)
+            try:
+                await websocket.accept()
+                while True:
+                    # 接收消息
+                    message_str = await websocket.receive_text()
+                    message = self._parse_message(message_str)
+                    
+                    if not message:
+                        await websocket.send_text(json.dumps({
+                            "type": "system",
+                            "status": "error",
+                            "message": "无效的消息格式"
+                        }))
+                        continue
+                        
+                    # 处理有效消息
+                    if self.websocket_handler.message_callback:
+                        response = await self.websocket_handler.message_callback(message)
+                        await websocket.send_text(response)
+                    
+            except WebSocketDisconnect:
+                logger.info("客户端断开连接")
+            except Exception as e:
+                logger.error(f"WebSocket错误: {str(e)}")
+                await websocket.close(code=1011, reason=str(e))
+
+    def _parse_message(self, message_str: str) -> Optional[dict]:
+        """解析和验证消息格式"""
+        try:
+            message = json.loads(message_str)
+            
+            # 验证必要字段
+            required_fields = ['id', 'category', 'friend_name', 'text']
+            if not all(key in message for key in required_fields):
+                raise ValueError("缺少必要字段")
+            
+            # 验证category值
+            if message['category'] not in ['私聊', '群聊']:
+                raise ValueError("无效的对话类型")
+            
+            # 群聊必须包含group_name
+            if message['category'] == '群聊' and not message.get('group_name'):
+                raise ValueError("群聊必须提供group_name")
+            
+            # 清理文本内容
+            message['text'] = message['text'].strip()[:500]
+            message.setdefault('image', '')
+            
+            return message
+            
+        except (json.JSONDecodeError, ValueError) as e:
+            logger.warning(f"无效消息格式: {message_str}，错误: {str(e)}")
+            return None
 
     def start(self):
         config = uvicorn.Config(
@@ -111,7 +176,10 @@ class ChatServer:
         """优雅停止服务器"""
         try:
             self.should_stop = True
-            self.websocket_handler.stop_connections()  # 停止所有连接的循环
+            # 停止所有连接的循环
+            self.websocket_handler.stop_connections()
+            
+            # 停止服务器
             if self.server:
                 self.server.should_exit = True
                 self.server.force_exit = True

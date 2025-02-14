@@ -55,16 +55,6 @@ class MemoryManager:
         self.last_interacted = {"friend_name": None, "group_name": None}
         self.context: List[Dict] = []
         self.friend_daily_tasks = {}
-
-    def _init_async_tasks(self):
-        import asyncio
-        try:
-            loop = asyncio.get_event_loop()
-        except RuntimeError:
-            loop = asyncio.new_event_loop()
-            asyncio.set_event_loop(loop)
-        
-        self.process_daily = loop.create_task(self._process_daily())
     
     def _get_table(self, table_name: str) -> lancedb.table.Table: # 通过名，返回一个table对象
         """统一表管理方法"""
@@ -81,7 +71,7 @@ class MemoryManager:
             )
         return self.lance_db.open_table(table_name)
     
-    def new_message(self, message: str) -> str:
+    def new_message(self, message: str) -> List[Dict]:
         """处理新消息，提供上下文"""
         current_friend = message["friend_name"]
         current_group = message.get("group_name", "")
@@ -90,13 +80,13 @@ class MemoryManager:
            self.last_interacted["group_name"] != current_group:
             if len(self.context) > 0:
                 self._archive_context(self.context, message)
-            self.context.clear()
-            
+                self.context.clear()
+                logger.info(f"检测到新对话者: {current_friend}@{current_group}，已保存上下文")
+                
             self.last_interacted = {
                 "friend_name": current_friend,
                 "group_name": current_group
             }
-            logger.info(f"检测到新对话者，已保存上下文: {current_friend}@{current_group}")
             return None
         else:
             return self.context
@@ -106,17 +96,22 @@ class MemoryManager:
         try:
             # 自动选择对应的表
             table_name = message["friend_name"] if message["category"] == "私聊" else message["group_name"]
-            table = self._get_table(table_name)
+
+            # 检查表是否存在
+            if table_name not in self.lance_db.list_tables():
+                return [{"text": "记忆中尚且没有相关信息"}]
+            else:
+                table = self._get_table(table_name)
             
-            # 生成查询向量
-            query_embedding = self.LLMClient.generate_embedding(message) if message else [0.0]*1024
-            
-            # 执行向量搜索
-            return self.lance_db.vector_search(
-                table=table,
-                query_vector=query_embedding,
-                limit=5
-            )
+                # 生成查询向量
+                query_embedding = self.LLMClient.generate_embedding(message) if message else [0.0]*1024
+                
+                # 执行向量搜索
+                return self.lance_db.vector_search(
+                    table=table,
+                    query_vector=query_embedding,
+                    limit=5
+                )
             
         except Exception as e:
             logger.error(f"上下文查询失败: {str(e)}")
@@ -129,7 +124,7 @@ class MemoryManager:
 
     需要考虑embedding模型的tokens限制，5条对话记录，作为一个记忆的单元，进行存储，多了就要被截断了
     '''
-    async def add_conversation(self, message: dict, answer: str):
+    def add_conversation(self, message: dict, answer: str):
         """添加对话记录（完整实现）"""
         try:
             # 构建对话记录
@@ -147,9 +142,10 @@ class MemoryManager:
             
             # 上下文归档逻辑
             if len(self.context) > 8:
-                self._archive_context(self.context[:5], message)
+                context_to_archive = self.context[:5]
                 # 保留最近3条上下文
                 self.context = self.context[-3:]
+                self._archive_context(context_to_archive, message)
             return True
         except Exception as e:
             logger.error(f"添加对话失败: {str(e)}")
@@ -199,14 +195,14 @@ class MemoryManager:
     #             table.delete(f"metadata['timestamp'] < '{datetime.now() - timedelta(days=30)}'")
 
     #         logger.info("每日维护任务完成")
-    
-    async def _process_daily(self):
-        """现在运行在Agent自己的事件循环中"""
-        while True:
-            await self._do_daily_task()
-            await asyncio.sleep(86400)
 
-    def _process_info(self, friend_name: str):
+
+    def daily_summary(self):
+            tables = self.memory.lance_db.list_tables()
+            for table_name in tables:
+                self._info_summary(table_name)
+
+    def _info_summary(self, friend_name: str):
         """信息总结更新"""
         table = self._get_table(friend_name)
         
@@ -245,5 +241,3 @@ class MemoryManager:
             )
         except Exception as e:
             logger.error(f"每日总结失败: {str(e)}")
-
-

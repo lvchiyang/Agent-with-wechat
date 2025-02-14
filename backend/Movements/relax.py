@@ -1,11 +1,10 @@
 import time
 
 
-def relax(num):
-    print(f"Thread {num} started")
+def relax():
+    print(f"正在休息")
     # 模拟耗时任务
     time.sleep(10) # ← 这里也会释放GIL
-    print(f"Thread {num} finished") 
+    print(f"休息结束") 
     
-    # 获取当前线程ID
-    # current_thread_id = threading.get_ident()
+

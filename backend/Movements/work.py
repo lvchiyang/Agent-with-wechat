@@ -4,12 +4,9 @@ import logging
 
 logger = logging.getLogger(__name__)
 
-def worker(stop_event: threading.Event):
-    try:
-        while not stop_event.is_set():
-            # logger.info("Working...")
-            time.sleep(10)
-    except Exception as e:
-        logger.error(f"Error in work: {str(e)}")
-    finally:
-        logger.info("Work activity stopped gracefully")
+
+def work():
+    print(f"正在工作")
+    # 模拟耗时任务
+    time.sleep(10) # ← 这里也会释放GIL
+    print(f"工作结束") 

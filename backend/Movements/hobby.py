@@ -1,8 +1,8 @@
 import time
 
-def hobby(num):
-    print(f"Thread {num} started")
+def hobby():
+    print(f"正在玩")
     # 模拟耗时任务
     time.sleep(10) # ← 这里也会释放GIL
-    print(f"Thread {num} finished")
+    print(f"爱好结束")
     
