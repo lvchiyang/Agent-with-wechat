@@ -15,12 +15,6 @@ class PromptManager:
         with open(character_path, "r", encoding="utf-8") as f:
             self.character = yaml.safe_load(f)
 
-    def get_system_prompt(self):
-        return f"""你扮演一个名叫{self.character['character']['name']}的人物。
-性格特点：{', '.join(self.character['character']['personality'])}
-背景：{self.character['character']['background']}
-请严格按照以上设定与用户对话。""" 
-    
     def get_user_prompt(self, message: str):
         return f"""用户消息：{message}"""
     
@@ -28,11 +22,16 @@ class PromptManager:
         return f"""AI回复：{message}"""
     
     def get_memory_prompt(self, message: str):
-        return f"""记忆：{self.get_system_prompt() + message}"""
+        return f"""记忆：{message}"""
     
     def get_system_prompt(self, related_memories: List[Dict], context: List[Dict], current_state: str):
         # 构建上下文提示
         context_prompt = f"""
+        你扮演一个名叫{self.character['character']['name']}的人物。
+    性格特点：{', '.join(self.character['character']['personality'])}
+    背景：{self.character['character']['background']}
+    请严格按照以上设定与用户对话。
+
         上下文：
         {context}
         
@@ -48,7 +47,7 @@ class PromptManager:
         3. 如果用户的问题与当前上下文无关，请根据你的性格特点，进行合理的回答
         4. 只输出你基于上述要求的回答
         """
-        return f"""{self.get_system_prompt()}\n  {context_prompt}"""
+        return f"""{context_prompt}"""
     
     def get_summary_prompt(self, message: str):
         return f"""总结：{message}"""

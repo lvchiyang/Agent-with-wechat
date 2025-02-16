@@ -1,13 +1,9 @@
-import time
-import threading
 import logging
 from backend.plugins.chat_server import ChatServer
 from backend.Memory.memory_manager import MemoryManager
 from backend.LLM.LLM_Client import LLM_Client
 from backend.LLM.prompt_manager import PromptManager
 from backend.Agent.plan import Plan
-import asyncio  
-from typing import List, Dict
 '''
 # Agent需要的变量：
 
@@ -26,18 +22,16 @@ logger = logging.getLogger(__name__)
 
 class Agent():
     def __init__(self):
-        self.LLMClient = LLM_Client()
-        self.memory = MemoryManager(self.LLMClient)
+        self.LLM_Client = LLM_Client()
+        self.memory_manager = MemoryManager(self.LLM_Client)
         self.prompt_manager = PromptManager()
-        self.chat_server = ChatServer()
-        self.chat_server.websocket_handler.message_callback = self.handle_message
+        self.chat_server = ChatServer(self.handle_message)
         self.current_state = "idle"  # 添加当前状态
         # 传递memory实例给Plan
-        self.plan_thread = Plan(
-            state_callback=self.update_state, # 状态更新回调
-            memory_manager=self.memory, # 传递memory实例，用于调用每日信息总结
-            llm_client=self.LLMClient # 传递llm实例，用于调用llm_plan
-        )
+        self.plan = Plan(self.update_state, self.memory_manager, self.LLM_Client)
+        # self.loop = asyncio.new_event_loop()
+        # 创建一个锁
+        # self.lock = threading.Lock()
 
     def start(self):
         try:
@@ -45,7 +39,7 @@ class Agent():
             # 先启动WebSocket服务器
             self.chat_server.start()
             # 再启动计划线程
-            self.plan_thread.start()
+            self.plan.start()
             logger.info("Agent started successfully")
         except Exception as e:
             logger.error(f"Error starting Agent: {str(e)}")
@@ -58,12 +52,14 @@ class Agent():
 
     async def handle_message(self, message: dict) -> str:   
         # 提供上下文
-        context = self.memory.new_message(message)
-        related_memories = self.memory.query_context(message)
-        prompt_manager = self.prompt_manager.get_system_prompt(message, related_memories, context, self.current_state)
+        context = self.memory_manager.new_message(message) 
+        related_memories = self.memory_manager.query_context(message)
+        prompt_manager = self.prompt_manager.get_system_prompt(related_memories, context, self.current_state)
 
-        response = await self.llm_client.chat(system_prompt = prompt_manager, user_input = message, enable_search=True)
-        self.memory.add_conversation(),
+        
+        response = await self.LLM_Client.chat(system_prompt = prompt_manager, user_input = message["text"], enable_search=True)
+        self.memory_manager.add_conversation(message, response)
+
         
         return response
 

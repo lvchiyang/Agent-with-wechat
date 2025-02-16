@@ -18,15 +18,8 @@ class AliyunMultimodalEmbedding(EmbeddingFunction):
         """返回嵌入向量的维度"""
         return VECTOR_DIM
 
-    def compute_query_embeddings(self, query: Union[str, bytes]) -> list[list[float]]:
-        """计算查询嵌入"""
-        return self.generate_embeddings(query)
 
-    def compute_source_embeddings(self, data: Union[str, bytes]) -> list[list[float]]:
-        """计算源数据嵌入"""
-        return self.generate_embeddings(data)
-
-    def generate_embeddings(self, input_data: Union[str, bytes]) -> list[list[float]]:
+    def generate_embeddings(self, input_data: Union[str, bytes]) -> list[float]:
         """调用阿里云多模态嵌入API生成嵌入向量"""
         headers = {
             "Authorization": f"Bearer {ALIYUN_API_KEY}",
@@ -59,7 +52,7 @@ class AliyunMultimodalEmbedding(EmbeddingFunction):
                 raise ValueError("API响应缺少有效数据")
                 
             # 返回第一个嵌入向量
-            return [response_data['output']['embeddings'][0]['embedding']]
+            return response_data['output']['embeddings'][0]['embedding']
         except requests.exceptions.RequestException as e:
             raise RuntimeError(f"API请求失败: {str(e)}")
         except (KeyError, ValueError) as e:

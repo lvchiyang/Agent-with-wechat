@@ -1,12 +1,14 @@
 import sys
 from pathlib import Path
 import yaml
-from typing import List, Dict
+from typing import List, Dict, Optional, Union
 import asyncio
-from AliyunLLM import AliyunLLM
-from prompt_manager import PromptManager
-from aliyun_embedding import AliyunMultimodalEmbedding
+from backend.LLM.AliyunLLM import AliyunLLM
+from backend.LLM.prompt_manager import PromptManager
 import platform
+import logging
+
+logger = logging.getLogger(__name__)
 '''
 这个文件是用来处理大模型的，包括初始化大模型、获取embedding、调用大模型进行对话
 我希望在这个代码当中进行一个封装：
@@ -38,7 +40,6 @@ class LLM_Client:
         self.llm = None
         self.prompt_manager = PromptManager()
         self._load_config()
-        self.embedding = AliyunMultimodalEmbedding()
 
     def _load_config(self):
         # 获取项目根目录
@@ -49,17 +50,17 @@ class LLM_Client:
         with open(config_path, "r", encoding="utf-8") as f:
             config = yaml.safe_load(f)
 
-        # 初始化大模型
+        # 初始化大模型（包含嵌入功能）
         self.llm = AliyunLLM(
-            api_key=config["llm"]["params"]["ali_qwen"]["api_key"],
-            model_version=config["llm"]["params"]["ali_qwen"]["version"]
+            config["llm"]["params"]["ali_qwen"]  # 直接传入整个配置字典
         )
 
     async def chat(
         self,
-        user_input: str,
+        system_prompt: str = "你是一个有帮助的AI助手。",
+        user_input: str = "",
         enable_search: bool = False,
-        system_prompt: str = "你是一个有帮助的AI助手。"
+        response_format: Optional[Dict] = {"type": "text"}
     ) -> str:
         """
         调用大模型进行对话
@@ -68,6 +69,7 @@ class LLM_Client:
             user_input: 用户输入内容
             enable_search: 是否启用联网搜索
             system_prompt: 系统提示词，默认为"你是一个有帮助的AI助手。"
+            response_format: 响应格式配置，例如 {"type": "json_object"}
             
         Returns:
             str: 模型的回复内容
@@ -76,10 +78,18 @@ class LLM_Client:
             {"role": "system", "content": system_prompt},
             {"role": "user", "content": user_input},
         ]
-        return await self.llm.chat(
+        response = await self.llm.chat(
             messages=messages,
-            enable_search=enable_search
+            enable_search=enable_search,
+            response_format=response_format
         )
+        logger.info(f"LLM调用成功，响应内容: {response}")
+
+        return response
+
+    def get_embedding(self, input_data: Union[str, bytes]) -> List[float]:
+        """获取文本或图片的嵌入向量"""
+        return self.llm.generate_embeddings(input_data)
 
 # 使用示例
 async def test_chat():
@@ -91,8 +101,20 @@ async def test_chat():
     user_input = "中国队在亚冬会获得了多少枚金牌"
     
     try:
-        response = await llm_client.chat(system_prompt = system_prompt, user_input=user_input, enable_search=True)
+        # 测试文本嵌入
+        text_embedding = llm_client.get_embedding(user_input)
+        print(f"测试文本: {user_input}")
+        print(f"生成的向量: {text_embedding}")
+        print(f"向量维度: {len(text_embedding)}")
+
+        # 测试对话功能
+        response = await llm_client.chat(
+            system_prompt=system_prompt, 
+            user_input=user_input, 
+            enable_search=True
+        )
         print("AI回复:", response)
+        
     except Exception as e:
         print("错误:", str(e))
 

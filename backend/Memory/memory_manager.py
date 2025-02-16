@@ -7,7 +7,6 @@ import lancedb
 from pathlib import Path
 from typing import List, Dict
 from datetime import datetime, timedelta
-from ast import literal_eval
 from backend.Memory.LanceDB_Manager import LanceDBManager
 
 '''
@@ -71,7 +70,7 @@ class MemoryManager:
             )
         return self.lance_db.open_table(table_name)
     
-    def new_message(self, message: str) -> List[Dict]:
+    def new_message(self, message: str) -> str:
         """处理新消息，提供上下文"""
         current_friend = message["friend_name"]
         current_group = message.get("group_name", "")
@@ -79,7 +78,8 @@ class MemoryManager:
         if self.last_interacted["friend_name"] != current_friend or \
            self.last_interacted["group_name"] != current_group:
             if len(self.context) > 0:
-                self._archive_context(self.context, message)
+                context_to_archive = self.context.copy()  # 创建上下文副本
+                self._archive_context(context_to_archive, message)
                 self.context.clear()
                 logger.info(f"检测到新对话者: {current_friend}@{current_group}，已保存上下文")
                 
@@ -104,7 +104,7 @@ class MemoryManager:
                 table = self._get_table(table_name)
             
                 # 生成查询向量
-                query_embedding = self.LLMClient.generate_embedding(message) if message else [0.0]*1024
+                query_embedding = self.LLMClient.get_embedding(message) if message else [0.0]*1024
                 
                 # 执行向量搜索
                 return self.lance_db.vector_search(
@@ -127,6 +127,9 @@ class MemoryManager:
     def add_conversation(self, message: dict, answer: str):
         """添加对话记录（完整实现）"""
         try:
+            # 添加日志记录
+            logger.debug(f"开始添加对话记录: message={message}, answer={answer}")
+
             # 构建对话记录
             structured_data = {
                 "id": str(datetime.now().timestamp()),
@@ -142,10 +145,13 @@ class MemoryManager:
             
             # 上下文归档逻辑
             if len(self.context) > 8:
-                context_to_archive = self.context[:5]
+                context_to_archive = self.context[:5].copy()
                 # 保留最近3条上下文
                 self.context = self.context[-3:]
                 self._archive_context(context_to_archive, message)
+            
+            # 添加日志记录
+            logger.info(f"成功添加对话记录")
             return True
         except Exception as e:
             logger.error(f"添加对话失败: {str(e)}")
@@ -154,9 +160,12 @@ class MemoryManager:
     def _archive_context(self, context: List[Dict], message: dict):
         """上下文归档（适配 LanceDB）"""
         try:
+            # 将上下文列表转换为JSON字符串
+            context_str = json.dumps(context, ensure_ascii=False)
+            
             # 生成嵌入向量
-            embedding = self.LLMClient.generate_embedding(context)  
-
+            embedding = self.LLMClient.get_embedding(context_str)  # 现在传入的是字符串
+            
             # 自动选择对应的表
             table_name = message["friend_name"] if message["category"] == "私聊" else message["group_name"]
             table = self._get_table(table_name)
@@ -165,7 +174,7 @@ class MemoryManager:
             data = {
                 "id": str(datetime.now().timestamp()),
                 "vector": embedding,
-                "text": json.dumps(context, ensure_ascii=False),  # 存储原始对话结构
+                "text": context_str,  # 存储原始对话结构
                 "image": "",
                 "category": message["category"],
             }
@@ -197,12 +206,12 @@ class MemoryManager:
     #         logger.info("每日维护任务完成")
 
 
-    def daily_summary(self):
-            tables = self.memory.lance_db.list_tables()
-            for table_name in tables:
-                self._info_summary(table_name)
+    async def daily_summary(self):
+        tables = self.lance_db.list_tables()
+        for table_name in tables:
+            await self._info_summary(table_name)
 
-    def _info_summary(self, friend_name: str):
+    async def _info_summary(self, friend_name: str):
         """信息总结更新"""
         table = self._get_table(friend_name)
         
@@ -232,7 +241,7 @@ class MemoryManager:
         """
         
         try:
-            response = self.LLMClient.generate(prompt)
+            response = await self.LLMClient.chat(prompt)
             # 更新个人信息
             self.lance_db.update_data(
                 table,

@@ -199,11 +199,16 @@
         };
         
         ws.onmessage = (event) => {
-            const response = JSON.parse(event.data);
-            if (response.type === 'system') {
-                appendMessage('系统', response.message, 'bot-message');
-            } else {
-                appendMessage('小爱', response.text, 'bot-message');
+            try {
+                const response = JSON.parse(event.data);
+                if (response.type === 'system') {
+                    appendMessage('系统', response.message, 'bot-message');
+                } else if (response.type === 'message') {
+                    appendMessage('小爱', response.text, 'bot-message');
+                }
+            } catch (e) {
+                console.error('消息解析错误:', e);
+                appendMessage('系统', '收到无法解析的消息', 'bot-message');
             }
         };
         
