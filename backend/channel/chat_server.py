@@ -4,16 +4,19 @@ import uvicorn
 import threading
 from fastapi import WebSocket
 from backend.LLM.prompt_manager import PromptManager
-from backend.plugins.rate_limiter import RateLimiter
+from backend.channel.rate_limiter import RateLimiter
 from backend.plugins.get_time import get_current_time
 import logging
 import json
 from typing import Optional
 from fastapi import WebSocketDisconnect
 import asyncio
-import time
+import time 
+from backend.channel.gewechat.chat_server import GeweChannel
 
 logger = logging.getLogger(__name__)
+channel = None  # 全局通道实例
+
 '''
 聊天服务器
 搭起来了，Agent实现对话，同时还可以做别的事情。现在先验证一下这一步。
@@ -99,6 +102,9 @@ class ChatServer:
             daemon=True
         )
         self.thread.start()
+        time.sleep(1)  # 给服务器启动留出时间
+        channel = GeweChannel()
+
 
 
     async def _process_messages(self, websocket):
@@ -108,13 +114,19 @@ class ChatServer:
             try:
                 if self.message_callback:
                     async with self.lock:  # 使用异步锁
+                        # 解析消息
+                        message = channel.parse_message(message)
+                        # 回调
                         response = await self.message_callback(message)
-                    # 修改响应格式为前端需要的JSON结构
-                    await websocket.send_text(json.dumps({
-                        "type": "message",
-                        "text": response,
-                        "timestamp": int(time.time() * 1000)
-                    }))
+                        # 发送消息  
+                        channel.post_text(response)
+                        
+                    # # 修改响应格式为前端需要的JSON结构
+                    # await websocket.send_text(json.dumps({
+                    #     "type": "message",
+                    #     "text": response,
+                    #     "timestamp": int(time.time() * 1000)
+                    # }))
             except Exception as e:
                 logger.error(f"处理消息时出错: {str(e)}")
             finally:
@@ -140,7 +152,7 @@ class ChatServer:
             
             # 清理文本内容
             message['text'] = message['text'].strip()[:500]
-            message.setdefault('image', '')
+            message.setdefault('image', None)
             
             return message
             

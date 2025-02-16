@@ -39,7 +39,7 @@ class Plan():
                     await self.excute_plan(plan)
                 except Exception as e:
                     logger.error(f"计划执行出错: {str(e)}")
-                await asyncio.sleep(10)
+                await asyncio.sleep(100)
 
 
         loop.run_until_complete(main_loop())
@@ -63,7 +63,6 @@ class Plan():
 
     async def get_plan_from_llm(self):
         """从LLM获取计划任务"""
-        current_time = get_current_time()
         if self.date_of_summary != get_current_day():
             summary_task = "今日尚未完成总结"
         else:
@@ -76,7 +75,7 @@ class Plan():
         3. relax - 休息
         4. summary - 每天只进行一次总结（仅在下午15-17点执行）{summary_task}
                 
-        当前时间：{current_time}
+        当前时间：{get_current_time()}
 
         要求：
         1. 以JSON格式返回，例如：{{"plan": "work"}}

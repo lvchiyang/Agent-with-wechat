@@ -1,7 +1,7 @@
 from ..util.terminal_printer import make_and_print_qr, print_green, print_yellow, print_red
 from ..util.http_util import post_json
 import time
-
+import webbrowser
 
 class LoginApi:
     def __init__(self, base_url, token):
@@ -119,6 +119,9 @@ class LoginApi:
             print_yellow("\n新设备登录平台，次日凌晨会掉线一次，重新登录时需使用原来的app_id取码，否则新app_id仍然会掉线，登录成功后则可以长期在线")
 
         make_and_print_qr(f"http://weixin.qq.com/x/{uuid}")
+
+        # 自动在浏览器中打开这个二维码
+        # webbrowser.open(f"http://weixin.qq.com/x/{uuid}")
 
         # 3. 轮询检查登录状态
         retry_count = 0

@@ -1,13 +1,16 @@
 dashscope
-fastapi
+fastapi >= 0.95
 uvicorn
 pyyaml
 pathlib
 openai
 aiohttp
+pypinyin
 lancedb>=0.6.0
 numpy>=1.21.0
 pytest>=7.0.0
 requests>=2.31.0
 websockets==10.4
+qrcode
+requests
 # 需要 GCC 8.4 以上的版本

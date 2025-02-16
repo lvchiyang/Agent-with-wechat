@@ -25,7 +25,7 @@ def create_and_run_agent():
     try:
         # 主线程简单循环
         while True:
-            time.sleep(1)
+            time.sleep(100)
     except KeyboardInterrupt:
         agent.stop()
         logger.info("Services stopped")
