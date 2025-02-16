@@ -57,7 +57,7 @@ class LLM_Client:
 
     async def chat(
         self,
-        system_prompt: str = "你是一个有帮助的AI助手。",
+        system_prompt: str = "你是一个AI助手，你的任务是根据用户的问题给出回答。",
         user_input: str = "",
         enable_search: bool = False,
         response_format: Optional[Dict] = {"type": "text"}

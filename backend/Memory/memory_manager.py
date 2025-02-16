@@ -6,6 +6,7 @@ import asyncio
 import lancedb
 from pathlib import Path
 from typing import List, Dict
+from backend.plugins.get_time import get_current_time
 from datetime import datetime, timedelta
 from backend.Memory.LanceDB_Manager import LanceDBManager
 
@@ -42,44 +43,51 @@ context的对话格式
     "friend_name": friend_name # 朋友/user姓名
     "group_name": group_name # 群聊名称，可为空
     "text": text  # 对话内容
-    "image": image,  # 图片信息，为空
+    # "image": image,  # 图片信息，为空，NULL或者None，而不是null
 } 
 '''
 
 class MemoryManager:
-    def __init__(self, LLMClient):
-        self.LLMClient = LLMClient
-        self.lance_db = LanceDBManager()
+    def __init__(self, LLM_Client):
+        self.LLM_Client = LLM_Client
+        self.lance_db = LanceDBManager(lance_path)
         # 移除非线程安全的事件循环代码
-        self.last_interacted = {"friend_name": None, "group_name": None}
+        self.last_interacted = {"friend_name": "", "group_name": ""}
         self.context: List[Dict] = []
         self.friend_daily_tasks = {}
-    
-    def _get_table(self, table_name: str) -> lancedb.table.Table: # 通过名，返回一个table对象
+
+
+    def create_or_open_table(self, table_name: str) -> lancedb.table.Table: # 通过名，返回一个table对象
         """统一表管理方法"""
         # 自动创建不存在的表
+        table_name = self.lance_db.name_to_pinyin(table_name)
         if table_name not in self.lance_db.list_tables():
             # 使用LLM生成初始嵌入向量
             self.lance_db.create_table(
                 table_name = table_name, # 所有的表都按对话对象的名称存取
                 id = "profile" , # 将个人信息的id设置为profile
-                vector="",
-                text="",
-                image="",
-                category=""
             )
         return self.lance_db.open_table(table_name)
     
+    def open_table(self, table_name: str) -> lancedb.table.Table: # 通过名，返回一个table对象
+        return self.lance_db.open_table(table_name)
+
     def new_message(self, message: str) -> str:
         """处理新消息，提供上下文"""
         current_friend = message["friend_name"]
         current_group = message.get("group_name", "")
+
+        if current_friend == "" and current_group == "":
+            self.last_interacted = {
+                "friend_name": current_friend,
+                "group_name": current_group
+            }
         
         if self.last_interacted["friend_name"] != current_friend or \
            self.last_interacted["group_name"] != current_group:
             if len(self.context) > 0:
                 context_to_archive = self.context.copy()  # 创建上下文副本
-                self._archive_context(context_to_archive, message)
+                self._archive_context(context_to_archive)
                 self.context.clear()
                 logger.info(f"检测到新对话者: {current_friend}@{current_group}，已保存上下文")
                 
@@ -90,32 +98,6 @@ class MemoryManager:
             return None
         else:
             return self.context
-
-    def query_context(self, message: str = None) -> List[Dict]:
-        """增强版上下文查询"""
-        try:
-            # 自动选择对应的表
-            table_name = message["friend_name"] if message["category"] == "私聊" else message["group_name"]
-
-            # 检查表是否存在
-            if table_name not in self.lance_db.list_tables():
-                return [{"text": "记忆中尚且没有相关信息"}]
-            else:
-                table = self._get_table(table_name)
-            
-                # 生成查询向量
-                query_embedding = self.LLMClient.get_embedding(message) if message else [0.0]*1024
-                
-                # 执行向量搜索
-                return self.lance_db.vector_search(
-                    table=table,
-                    query_vector=query_embedding,
-                    limit=5
-                )
-            
-        except Exception as e:
-            logger.error(f"上下文查询失败: {str(e)}")
-            return []
 
     '''
     add_conversation需要实现的功能
@@ -132,7 +114,7 @@ class MemoryManager:
 
             # 构建对话记录
             structured_data = {
-                "id": str(datetime.now().timestamp()),
+                "id": str(get_current_time()),
                 "category": message["category"],
                 "friend_name": message["friend_name"],
                 "group_name": message.get("group_name", ""),
@@ -157,45 +139,73 @@ class MemoryManager:
             logger.error(f"添加对话失败: {str(e)}")
             return False
 
-    def _archive_context(self, context: List[Dict], message: dict):
+    def _archive_context(self, context: List[Dict]):
         """上下文归档（适配 LanceDB）"""
         try:
             # 将上下文列表转换为JSON字符串
             context_str = json.dumps(context, ensure_ascii=False)
             
             # 生成嵌入向量
-            embedding = self.LLMClient.get_embedding(context_str)  # 现在传入的是字符串
-            
-            # 自动选择对应的表
-            table_name = message["friend_name"] if message["category"] == "私聊" else message["group_name"]
-            table = self._get_table(table_name)
-            
-            # 构建存储数据
-            data = {
-                "id": str(datetime.now().timestamp()),
-                "vector": embedding,
-                "text": context_str,  # 存储原始对话结构
-                "image": "",
-                "category": message["category"],
-            }
+            embedding = self.LLM_Client.get_embedding(context_str)  # 现在传入的是字符串
 
-            # 插入数据库
-            self.lance_db.add_data(table, **data)
+            table_name = self.last_interacted["friend_name"] if not self.last_interacted["group_name"] == "群聊" else self.last_interacted["group_name"]
             
-            # 新增数据之后，新增索引
-            if self.lance_db.get_table_count(table) < 100:
-                self.lance_db.create_vector_index_1(table)
-            else:
-                # 自动创建高级索引方式
-                self.lance_db.create_vector_index_100(table)
+            if table_name not in self.lance_db.list_tables():
+                # 使用LLM生成初始嵌入向量
+                table = self.lance_db.create_table(table_name = table_name,
+                                        id = "profile" ) # 将个人信息的id设置为profile
+            else:                          
+                table = self.lance_db.open_table(table_name)
+            
+            # 插入数据库
+            self.lance_db.add_data(table, 
+                                   id=str(get_current_time()), 
+                                   vector=embedding, 
+                                   text=context_str)
+            
+            # # 新增数据之后，新增索引
+            # if self.lance_db.get_table_count(table) < 100:
+            #     self.lance_db.create_vector_index_1(table)
+            # else:
+            #     # 自动创建高级索引方式
+            #     self.lance_db.create_vector_index_100(table)
         except Exception as e:
             logger.error(f"上下文归档失败: {str(e)}")
 
 
+    def query_context(self, message: dict = None) -> List[Dict]:
+        """增强版上下文查询"""
+        try:
+            # 自动选择对应的表
+            table_name = message["friend_name"] if not message["category"] == "群聊" else message["group_name"]
+            table_name = self.lance_db.name_to_pinyin(table_name)
+            # 检查表是否存在
+            if table_name not in self.lance_db.list_tables():
+                logger.info(f"记忆中尚且没有和{table_name}相关的信息")
+                return [{"记忆中尚且没有相关信息"}]
+            else:
+                table = self.lance_db.open_table(table_name)
+                context_str = json.dumps(message, ensure_ascii=False)
+
+                # 生成查询向量
+                query_embedding = self.LLM_Client.get_embedding(context_str) if message else [0.0]*1024
+                
+                # 执行向量搜索
+                return self.lance_db.vector_search(
+                    table=table,
+                    query_vector=query_embedding,
+                    limit=5
+                )
+            
+        except Exception as e:
+            logger.error(f"上下文查询失败: {str(e)}")
+            return []
+        
     # async def daily_cleanup(self):
     #     """每日维护任务"""
     #     while True:
     #         await asyncio.sleep(86400)  # 24小时
+            # table_name = self.lance_db.name_to_pinyin(table_name)
 
     #         # 遍历所有表进行维护
     #         for table_name in self.lance_db.list_tables():
@@ -213,7 +223,7 @@ class MemoryManager:
 
     async def _info_summary(self, friend_name: str):
         """信息总结更新"""
-        table = self._get_table(friend_name)
+        table = self.lance_db.open_table(friend_name)
         
         # 查询当天数据
         today = datetime.now().date().isoformat()
@@ -241,7 +251,7 @@ class MemoryManager:
         """
         
         try:
-            response = await self.LLMClient.chat(prompt)
+            response = await self.LLM_Client.chat(prompt)
             # 更新个人信息
             self.lance_db.update_data(
                 table,

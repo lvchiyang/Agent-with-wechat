@@ -1,9 +1,24 @@
-import lancedb
-import numpy as np
-from typing import List, Dict, Optional
+import sys
 from pathlib import Path
 import os
 
+from pypinyin import pinyin, Style
+
+
+# 将项目根目录添加到 sys.path
+project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..'))
+sys.path.append(project_root)
+
+# 使用绝对导入
+from backend.LLM.LLM_Client import LLM_Client
+from datetime import datetime
+import time
+import json
+
+
+import lancedb
+import numpy as np
+from typing import List, Dict, Optional
 
 # 获取项目根目录
 BASE_DIR = Path(__file__).resolve().parent.parent
@@ -16,8 +31,16 @@ class LanceDBManager:
     def __init__(self, uri: str = str(chroma_path)):
         """初始化数据库连接"""
         self.db = lancedb.connect(uri)
+
+    def name_to_pinyin(self, text):
+        # 使用pypinyin进行转换，普通风格
+        result = pinyin(text, style=Style.NORMAL,heteronym=False)
+        # 提取拼音并首字母大写，不加空格
+        pinyin_str = "".join([item[0].capitalize() for item in result])
+        return pinyin_str
         
-    def create_table(self, table_name: str, id: str, vector: List[float], text: str, image: str = None, category: str = None) -> lancedb.table.Table:
+    def create_table(self, table_name: str, id: str = "", vector: List[float] = [0.0] * 1024, text: str = "", image: str = None, category: str = None) -> lancedb.table.Table:
+        table_name = self.name_to_pinyin(table_name)
         """创建表并插入初始数据"""
         data = [
             {
@@ -31,6 +54,7 @@ class LanceDBManager:
         return self.db.create_table(table_name, data, mode="overwrite")
     
     def open_table(self, table_name: str) -> lancedb.table.Table:
+        table_name = self.name_to_pinyin(table_name)
         """打开表"""
         return self.db.open_table(table_name)   
     
@@ -42,7 +66,7 @@ class LanceDBManager:
         """关闭表"""
         table.close()
 
-    def add_data(self, table: lancedb.table.Table, id: str, vector: List[float], text: str, image: str = None, category: str = None):
+    def add_data(self, table: lancedb.table.Table, id: str, vector: List[float], text: str, image: str = None):
         """插入新数据"""
         data = [
             {
@@ -50,7 +74,6 @@ class LanceDBManager:
                 "vector": vector,  # 1024维向量
                 "text": text,
                 "image": image, 
-                "category": category,  # 预留
             } 
         ]
         return table.add(data)
@@ -65,10 +88,9 @@ class LanceDBManager:
 
     def vector_search(self, table: lancedb.table.Table, query_vector: List[float], limit: int = 5, filter: Optional[str] = None) -> List[Dict]:
         """向量相似度搜索"""
-        return (table.search(query_vector)
-                .limit(limit)
-                .where(filter)
-                .execute())
+        query = table.search(query_vector).limit(limit).to_pandas()
+        text_list = query["text"].tolist()
+        return text_list
     
     '''
     不同索引方式
@@ -103,18 +125,24 @@ class LanceDBManager:
         return self.db.table_names()
 
     def delete_table(self, table_name: str) -> None:
+        table_name = pinyin(table_name, heteronym=False)
         """删除表"""
         self.db.drop_table(table_name)
 
-# 测试代码
-if __name__ == "__main__":
-    # 初始化管理器
-    db_manager = LanceDBManager()
+
     
+
+def test_vector_search():
+    db_manager = LanceDBManager()
+
     # 创建测试表
     test_vector = np.random.rand(1024).tolist()
-    test_table = db_manager.create_table("test_table", "1", test_vector, "测试文本")
+    test_table = db_manager.create_table("test_table2", "1", test_vector, "测试文本")
     print("创建表成功，表列表:", db_manager.list_tables())
+
+    # 打开表
+    test_table = db_manager.open_table("test_table2")
+
     
     # 插入新数据
     new_vector = np.random.rand(1024).tolist()
@@ -124,7 +152,7 @@ if __name__ == "__main__":
     # 执行搜索
     query_vec = np.random.rand(1024).tolist()
     results = db_manager.vector_search(test_table, new_vector, limit=3)
-    print("搜索结果示例:", results[:2])
+    print("搜索结果示例:", results)
     
     # 更新数据
     db_manager.update_data(test_table, "id == '1'", {"text": "更新后的文本"})
@@ -145,3 +173,84 @@ if __name__ == "__main__":
     # 删除表
     # db_manager.delete_table("test_table")
     print("表删除成功，剩余表:", db_manager.list_tables())
+
+
+
+def test_add_data():
+    db_manager = LanceDBManager()
+
+    db_manager.create_table("test_table")
+    print("创建表成功，表列表:", db_manager.list_tables())
+
+    LLMClient = LLM_Client()
+
+
+    timestamp = time.time()
+    readable_time = datetime.fromtimestamp(timestamp).strftime('%Y-%m-%d %H:%M:%S')
+    query = {
+        "id": "1739704423283",
+        "category": "私聊",
+        "friend_name": "A",
+        "group_name": "测试群组",
+        "text": "我20岁了",
+        "image": ""
+    }
+    answer = "你好年轻"
+
+    # 构建对话记录
+    structured_data = {
+        "id": str(readable_time),
+        "category": query["category"],
+        "friend_name": query["friend_name"],
+        "group_name": query.get("group_name", ""),
+        "Dialogue": f"{query['friend_name']}: {query['text']} Assistant: {answer}",
+        "image": ""  #  message.get("image", "") # 暂且不支持图片信息
+    }
+    context: List[Dict] = []
+    context.append(structured_data)
+    context.append(structured_data)
+    context.append(structured_data)
+    context.append(structured_data)
+    
+    # 将字典转换为json字符串
+    # context_str = json.dumps(structured_data, ensure_ascii=False)
+
+    # 也可以将list[dict]转换为json字符串
+    context_str = json.dumps(context, ensure_ascii=False)
+
+    # dialogue_embedding = np.random.rand(1024).tolist()
+    dialogue_embedding = LLMClient.get_embedding(context_str)
+
+    # 打开表
+    test_table = db_manager.open_table("test_table")
+
+    db_manager.add_data(test_table, readable_time, dialogue_embedding, context_str)
+
+    query = {
+        "id": "1739704423283",
+        "category": "私聊",
+        "friend_name": "A",
+        "group_name": "测试群组",
+        "text": "我多大了？",
+        "image": ""
+    }
+    query_str = json.dumps(query, ensure_ascii=False)
+
+    # query_embedding = np.random.rand(1024).tolist()
+    query_embedding = LLMClient.get_embedding(query_str)
+
+    test_table = db_manager.open_table("test_table")
+
+    results = db_manager.vector_search(test_table, query_embedding, limit=3)
+
+    # print(results)
+    # print(type(results))
+
+    json_object = json.loads(results[0])
+    print(json_object)
+
+
+# 测试代码
+if __name__ == "__main__":
+    test_add_data()
+    # test_vector_search()

@@ -50,17 +50,15 @@ class Agent():
         self.chat_server.stop()
         self.plan_thread.stop()
 
-    async def handle_message(self, message: dict) -> str:   
+    async def handle_message(self, message: dict) -> str:  
         # 提供上下文
         context = self.memory_manager.new_message(message) 
         related_memories = self.memory_manager.query_context(message)
-        prompt_manager = self.prompt_manager.get_system_prompt(related_memories, context, self.current_state)
-
-        
+        prompt_manager = self.prompt_manager.get_system_prompt(related_memories, context, self.current_state)        
         response = await self.LLM_Client.chat(system_prompt = prompt_manager, user_input = message["text"], enable_search=True)
+
         self.memory_manager.add_conversation(message, response)
 
-        
         return response
 
     def update_state(self, new_state: str):

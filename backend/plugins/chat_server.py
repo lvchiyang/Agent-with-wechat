@@ -140,7 +140,7 @@ class ChatServer:
             
             # 清理文本内容
             message['text'] = message['text'].strip()[:500]
-            message.setdefault('image', '')
+            message.setdefault('image', None)
             
             return message
             

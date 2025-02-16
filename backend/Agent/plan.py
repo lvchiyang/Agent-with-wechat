@@ -39,7 +39,7 @@ class Plan():
                     await self.excute_plan(plan)
                 except Exception as e:
                     logger.error(f"计划执行出错: {str(e)}")
-                await asyncio.sleep(10)
+                await asyncio.sleep(100)
 
 
         loop.run_until_complete(main_loop())
