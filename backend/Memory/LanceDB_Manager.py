@@ -33,6 +33,7 @@ class LanceDBManager:
         result = pinyin(text, style=Style.NORMAL,heteronym=False)
         # 提取拼音并首字母大写，不加空格
         pinyin_str = "".join([item[0].capitalize() for item in result])
+        pinyin_str = pinyin_str.replace(" ", "")
         return pinyin_str
         
     def create_table(self, table_name: str, id: int , vector: List[float] = [0.0] * 1024, text: str = "", image: str = None, category: str = None) -> lancedb.table.Table:

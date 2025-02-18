@@ -132,7 +132,7 @@ class MemoryManager:
                 context_to_archive = self.context[:5].copy()
                 # 保留最近3条上下文
                 self.context = self.context[-3:]
-                self._archive_context(context_to_archive, message)
+                self._archive_context(context_to_archive)
             
             # 添加日志记录
             logger.info(f"成功添加对话记录")

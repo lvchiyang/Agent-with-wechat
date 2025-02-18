@@ -74,6 +74,7 @@ class ChatServer(threading.Thread):
         """主事件循环"""
         self.running = True
         server_task = asyncio.create_task(self._run_server())
+        processor_task = asyncio.create_task(self._message_processor())
         
         # 等待服务器启动完成
         await self.server_started_event.wait()
