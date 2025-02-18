@@ -43,15 +43,9 @@ def create_and_run_agent():
         signal.signal(s, lambda sig, frame: signal_handler(sig, frame, agent_thread))
     
     try:
-<<<<<<< HEAD
         # 主线程保持运行直到收到信号
         while agent_thread.is_alive():
             agent_thread.join(1)
-=======
-        # 主线程简单循环
-        while True:
-            time.sleep(100)
->>>>>>> baa2edec02e2f83a4119dc782959ba32d2054bf2
     except KeyboardInterrupt:
         pass
     finally:
