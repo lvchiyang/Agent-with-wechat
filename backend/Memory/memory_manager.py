@@ -152,7 +152,7 @@ class MemoryManager:
 
             if self.last_interacted["group_name"] == "群聊":
                 table_name = self.last_interacted["group_name"]
-                category = f"群聊名称：{self.last_interacted["group_name"]} 群聊成员：{table_name}"
+                category = f'群聊名称：{self.last_interacted["group_name"]} 群聊成员：{table_name}'
             else:
                 category = table_name = self.last_interacted["friend_name"]
 

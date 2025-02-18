@@ -64,9 +64,6 @@ class Agent():
         prompt_manager = self.prompt_manager.get_system_prompt(related_memories, context, self.current_state)        
         response = await self.LLM_Client.chat(system_prompt = prompt_manager, user_input = message["text"], enable_search=True)
 
-        if response == "对话已经完成":
-            response = None
-
         self.memory_manager.add_conversation(message, response)
 
         return response

@@ -17,3 +17,6 @@ backend/Movements/__pycache__
 backend/plugins/__pycache__
 backend/plugins/plugins/__pycache__
 backend/plugins/plugins/plugins/__pycache__
+
+backend/channel/gewechat/__pycache__
+backend/channel/gewechat/api/__pycache__
