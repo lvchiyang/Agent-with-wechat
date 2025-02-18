@@ -1,6 +1,6 @@
 import yaml
 from pathlib import Path
-from client import GewechatClient
+from .client import GewechatClient
 
 class GeweChannel:
     def __init__(self):
@@ -18,6 +18,8 @@ class GeweChannel:
         self.token = self.config['gewechat'].get('token', "")
         self.base_url = self.config['gewechat'].get('base_url', "")
         self.callback_url = self.config['gewechat'].get('callback_url', "")
+
+        # 初始化客户端
         self.client = GewechatClient(self.base_url, self.token)
         
         # 检查登录状态
@@ -30,7 +32,7 @@ class GeweChannel:
 
     def connect(self):
         # 初始化客户端
-        self.client = GewechatClient(self.base_url, self.token)
+        self.client = self.client.set_callback(self.token, self.callback_url)
 
     def load_config(self):
         """加载配置文件"""
@@ -108,6 +110,7 @@ class GeweChannel:
             category = "私聊"
             group_name = ""
             friend_name = ""
+            text = ""
             
             # 判断是否是群消息
             if '@' in group_id:
@@ -141,9 +144,9 @@ class GeweChannel:
             return {}
         
 
-    def post_text(self, answer: dict):
+    def post_text(self, msg: dict):
         """发送回复的统一入口"""
-        self.client.post_text(self.app_id, answer["id"],answer["response"])
+        self.client.post_text(self.app_id, msg["id"],msg["text"])
 
     # def _handle_message(self, msg: dict):
     #     """处理单条消息"""

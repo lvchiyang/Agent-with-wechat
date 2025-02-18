@@ -11,8 +11,10 @@ import json
 from typing import Optional
 from fastapi import WebSocketDisconnect
 import asyncio
-import time 
-from backend.channel.gewechat.chat_server import GeweChannel
+import time     
+from fastapi import FastAPI, Request, BackgroundTasks
+
+from backend.channel.gewechat.chat_server_test import GeweChannel
 
 logger = logging.getLogger(__name__)
 channel = None  # 全局通道实例
@@ -46,6 +48,7 @@ class ChatServer:
         self.lock = asyncio.Lock()
         self.message_queue = asyncio.Queue()
         self.processing = False
+        self.processing_task = None  # 添加后台处理任务引用
 
     def _setup(self):
         # 允许跨域
@@ -57,38 +60,79 @@ class ChatServer:
             allow_headers=["*"],
         )
 
-        # 注册WebSocket路由
-        @self.app.websocket("/chat")
-        async def websocket_endpoint(websocket: WebSocket):
+        # 改为HTTP POST接口
+        @self.app.post("/v2/api/callback/collect")
+        async def receive_message(request: Request, background_tasks: BackgroundTasks):
             try:
-                await websocket.accept()
-                # 启动消息处理任务
-                processing_task = asyncio.create_task(self._process_messages(websocket))
+                data = await request.json()
+                # message = self._parse_message(data)  # 直接解析请求体
                 
-                while True:
-                    # 接收消息
-                    message_str = await websocket.receive_text()
-                    message = self._parse_message(message_str)
-                    
-                    if not message:
-                        await websocket.send_text(json.dumps({
-                            "type": "system",
-                            "status": "error",
-                            "message": "无效的消息格式"
-                        }))
-                        continue
-                    
-                    # 将消息放入队列
-                    await self.message_queue.put(message)
-                    
-            except WebSocketDisconnect:
-                logger.info("客户端断开连接")
-                processing_task.cancel()  # 取消处理任务
+                # if not message:
+                #     return {"status": "error", "message": "无效的消息格式"}
+                
+                await self._process_messages(data)
+                # 将消息放入队列并立即返回响应
+                # await self.message_queue.put(data)
+                # background_tasks.add_task(self._start_processing)  # 添加后台处理任务
+                
+                # return {"status": "success", "message": "消息已接收"}
+                
+            except json.JSONDecodeError:
+                print (f"status: error, message: 无效的JSON格式")
             except Exception as e:
-                logger.error(f"WebSocket错误: {str(e)}")
-                processing_task.cancel()  # 取消处理任务
-                await websocket.close(code=1011, reason=str(e))
-                
+                logger.error(f"请求处理错误: {str(e)}")
+                print (f"status: error, message: 服务器内部错误")
+
+
+
+    async def _process_messages(self, message):
+        """持续处理消息队列中的消息"""
+        # global channel
+        # message = await self.message_queue.get()
+        try:
+            if self.message_callback:
+                async with self.lock:
+                    print(f"message:{message}")
+
+                    parsed_msg = channel.parse_message(message)
+                    print(f"parsed_msg:{parsed_msg}")
+
+                    if parsed_msg:
+                        response = await self.message_callback(parsed_msg)
+                        response = {"id": parsed_msg['id'], "text": "response"}
+                        channel.post_text(response)
+        except Exception as e:
+            logger.error(f"处理消息时出错: {str(e)}")
+        # finally:
+            # self.message_queue.task_done()
+
+    # def _parse_message(self, data: dict) -> Optional[dict]:
+    #     """直接验证请求体字典"""
+    #     try:
+    #         # 验证必要字段
+    #         required_fields = ['id', 'category', 'friend_name', 'text']
+    #         if not all(key in data for key in required_fields):
+    #             raise ValueError("缺少必要字段")
+            
+    #         # 验证category值
+    #         if data['category'] not in ['私聊', '群聊']:
+    #             raise ValueError("无效的对话类型")
+            
+    #         # 群聊必须包含group_name
+    #         if data['category'] == '群聊' and not data.get('group_name'):
+    #             raise ValueError("群聊必须提供group_name")
+            
+    #         # 清理文本内容
+    #         data['text'] = data['text'].strip()[:500]
+    #         data.setdefault('image', None)
+            
+    #         return data
+            
+    #     except ValueError as e:
+    #         logger.warning(f"无效消息格式: {str(e)}")
+    #         return None
+
+
     def start(self):
         config = uvicorn.Config(
             self.app,
@@ -102,64 +146,19 @@ class ChatServer:
             daemon=True
         )
         self.thread.start()
+
+        global channel
         time.sleep(1)  # 给服务器启动留出时间
         channel = GeweChannel()
+        if not channel:
+            raise RuntimeError("Channel 未初始化！")
+        channel.connect()
 
-
-
-    async def _process_messages(self, websocket):
-        """处理消息队列中的消息"""
-        while True:
-            message = await self.message_queue.get()
-            try:
-                if self.message_callback:
-                    async with self.lock:  # 使用异步锁
-                        # 解析消息
-                        message = channel.parse_message(message)
-                        # 回调
-                        response = await self.message_callback(message)
-                        # 发送消息  
-                        channel.post_text(response)
-                        
-                    # # 修改响应格式为前端需要的JSON结构
-                    # await websocket.send_text(json.dumps({
-                    #     "type": "message",
-                    #     "text": response,
-                    #     "timestamp": int(time.time() * 1000)
-                    # }))
-            except Exception as e:
-                logger.error(f"处理消息时出错: {str(e)}")
-            finally:
-                self.message_queue.task_done()
-
-    def _parse_message(self, message_str: str) -> Optional[dict]:
-        """解析和验证消息格式"""
-        try:
-            message = json.loads(message_str)
-            
-            # 验证必要字段
-            required_fields = ['id', 'category', 'friend_name', 'text']
-            if not all(key in message for key in required_fields):
-                raise ValueError("缺少必要字段")
-            
-            # 验证category值
-            if message['category'] not in ['私聊', '群聊']:
-                raise ValueError("无效的对话类型")
-            
-            # 群聊必须包含group_name
-            if message['category'] == '群聊' and not message.get('group_name'):
-                raise ValueError("群聊必须提供group_name")
-            
-            # 清理文本内容
-            message['text'] = message['text'].strip()[:500]
-            message.setdefault('image', None)
-            
-            return message
-            
-        except (json.JSONDecodeError, ValueError) as e:
-            logger.warning(f"无效消息格式: {message_str}，错误: {str(e)}")
-            return None
-
+    # async def _start_processing(self):
+    #     """启动消息处理（如果尚未运行）"""
+    #     if not self.processing and not self.processing_task:
+    #         self.processing = True
+    #         self.processing_task = asyncio.create_task(self._process_messages())
 
     async def stop_connections(self):
         """关闭所有WebSocket连接"""

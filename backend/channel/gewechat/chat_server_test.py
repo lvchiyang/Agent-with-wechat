@@ -3,7 +3,7 @@ from fastapi.responses import JSONResponse
 import uvicorn
 import traceback
 import threading
-from gewe_channel import GeweChannel
+from .gewe_channel import GeweChannel
 
 config_path = "config/config.yaml"
 

@@ -48,9 +48,10 @@ class Agent():
     def stop(self):
         """停止Agent,停止所有线程"""
         self.chat_server.stop()
-        self.plan_thread.stop()
+        self.plan.stop()
 
     async def handle_message(self, message: dict) -> str:  
+        id = message["id"]
         # 提供上下文
         context = self.memory_manager.new_message(message) 
         related_memories = self.memory_manager.query_context(message)
@@ -59,7 +60,7 @@ class Agent():
 
         self.memory_manager.add_conversation(message, response)
 
-        return {'id': message["id"], 'response': response}
+        return {'id': id, 'response': response}
 
     def update_state(self, new_state: str):
         """更新Agent状态"""
