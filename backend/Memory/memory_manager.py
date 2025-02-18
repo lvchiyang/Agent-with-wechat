@@ -67,7 +67,11 @@ class MemoryManager:
             # 使用LLM生成初始嵌入向量
             self.lance_db.create_table(
                 table_name = table_name, # 所有的表都按对话对象的名称存取
+<<<<<<< HEAD
                 id = 1 , # 将个人信息的id设置为profile
+=======
+                id = "profile" , # 将个人信息的id设置为profile
+>>>>>>> baa2edec02e2f83a4119dc782959ba32d2054bf2
             )
         return self.lance_db.open_table(table_name)
     
@@ -150,6 +154,7 @@ class MemoryManager:
             # 生成嵌入向量
             embedding = self.LLM_Client.get_embedding(context_str)  # 现在传入的是字符串
 
+<<<<<<< HEAD
             if self.last_interacted["group_name"] == "群聊":
                 table_name = self.last_interacted["group_name"]
                 category = f"群聊名称：{self.last_interacted["group_name"]} 群聊成员：{table_name}"
@@ -161,12 +166,24 @@ class MemoryManager:
                 table = self.lance_db.create_table(table_name = table_name,
                                         id = 1 ,
                                         category = category) # 将个人信息的id设置为profile
+=======
+            table_name = self.last_interacted["friend_name"] if not self.last_interacted["group_name"] == "群聊" else self.last_interacted["group_name"]
+            
+            if table_name not in self.lance_db.list_tables():
+                # 使用LLM生成初始嵌入向量
+                table = self.lance_db.create_table(table_name = table_name,
+                                        id = "profile" ) # 将个人信息的id设置为profile
+>>>>>>> baa2edec02e2f83a4119dc782959ba32d2054bf2
             else:                          
                 table = self.lance_db.open_table(table_name)
             
             # 插入数据库
             self.lance_db.add_data(table, 
+<<<<<<< HEAD
                                    id=int(time.time()), 
+=======
+                                   id=str(get_current_time()), 
+>>>>>>> baa2edec02e2f83a4119dc782959ba32d2054bf2
                                    vector=embedding, 
                                    text=context_str)
             
@@ -238,6 +255,7 @@ class MemoryManager:
             category = profile["category"]
             profile = profile["text"]
 
+<<<<<<< HEAD
             # 生成总结提示
             prompt = f"""请从今日与{category}的对话中提取重要个人信息：        
             要求：
@@ -261,3 +279,44 @@ class MemoryManager:
                 )
             except Exception as e:
                 logger.error(f"每日总结失败: {str(e)}")
+=======
+    async def _info_summary(self, friend_name: str):
+        """信息总结更新"""
+        table = self.lance_db.open_table(friend_name)
+        
+        # 查询当天数据
+        today = datetime.now().date().isoformat()
+        results = table.search([0.0]*1024).where(
+            f"id >= '{today}'"
+        ).execute()
+        
+        if len(results) == 0:  # 修改为检查结果长度，因为LanceDB返回的是列表而不是DataFrame
+            return
+
+        # 获取个人信息
+        profile_results = table.search([0.0]*1024).where("id == 'profile'").execute()
+        profile = profile_results[0]['text'] if len(profile_results) > 0 else "无已知信息"  # 提取profile文本内容
+
+        # 生成总结提示
+        prompt = f"""请从今日与{friend_name}的对话中提取重要个人信息：        
+        要求：
+        1. 只返回个人相关信息，不要输出其他无关内容，内容保持简洁，回答中不需要对你的更改做任何说明
+        2. 为今日总结的信息添加时间戳标签用来区分信息的时间
+        3. 如果今日没有对话记录，则将已知信息返回
+        4. 不要丢失之前的已知信息，除非相同的内容产生更新
+
+        已知信息：{profile}
+        今日对话记录：{[result['text'] for result in results]}
+        """
+        
+        try:
+            response = await self.LLM_Client.chat(prompt)
+            # 更新个人信息
+            self.lance_db.update_data(
+                table,
+                where_condition="id == 'profile'",  # 修改为更新profile记录
+                values={"text": response, "category": "private_context"}
+            )
+        except Exception as e:
+            logger.error(f"每日总结失败: {str(e)}")
+>>>>>>> baa2edec02e2f83a4119dc782959ba32d2054bf2

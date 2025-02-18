@@ -1,6 +1,12 @@
+<<<<<<< HEAD
 import os
 import sys
 from pathlib import Path
+=======
+import sys
+from pathlib import Path
+import os
+>>>>>>> baa2edec02e2f83a4119dc782959ba32d2054bf2
 
 from pypinyin import pinyin, Style
 
@@ -8,7 +14,10 @@ from pypinyin import pinyin, Style
 # 将项目根目录添加到 sys.path
 project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..'))
 sys.path.append(project_root)
+<<<<<<< HEAD
 from datetime import datetime, timedelta
+=======
+>>>>>>> baa2edec02e2f83a4119dc782959ba32d2054bf2
 
 # 使用绝对导入
 from backend.LLM.LLM_Client import LLM_Client
@@ -33,10 +42,16 @@ class LanceDBManager:
         result = pinyin(text, style=Style.NORMAL,heteronym=False)
         # 提取拼音并首字母大写，不加空格
         pinyin_str = "".join([item[0].capitalize() for item in result])
+<<<<<<< HEAD
         pinyin_str = pinyin_str.replace(" ", "")
         return pinyin_str
         
     def create_table(self, table_name: str, id: int , vector: List[float] = [0.0] * 1024, text: str = "", image: str = None, category: str = None) -> lancedb.table.Table:
+=======
+        return pinyin_str
+        
+    def create_table(self, table_name: str, id: str = "", vector: List[float] = [0.0] * 1024, text: str = "", image: str = None, category: str = None) -> lancedb.table.Table:
+>>>>>>> baa2edec02e2f83a4119dc782959ba32d2054bf2
         table_name = self.name_to_pinyin(table_name)
         """创建表并插入初始数据"""
         data = [
@@ -63,7 +78,11 @@ class LanceDBManager:
         """关闭表"""
         table.close()
 
+<<<<<<< HEAD
     def add_data(self, table: lancedb.table.Table, id: int, vector: List[float], text: str, image: str = None):
+=======
+    def add_data(self, table: lancedb.table.Table, id: str, vector: List[float], text: str, image: str = None):
+>>>>>>> baa2edec02e2f83a4119dc782959ba32d2054bf2
         """插入新数据"""
         data = [
             {
@@ -85,6 +104,7 @@ class LanceDBManager:
 
     def vector_search(self, table: lancedb.table.Table, query_vector: List[float] = None, limit: int = 5, filter: Optional[str] = None) -> List[Dict]:
         """向量相似度搜索"""
+<<<<<<< HEAD
         query = table.search(query_vector).limit(limit).where(filter).to_pandas()
         text_list = query["text"].tolist()
         return text_list
@@ -93,6 +113,11 @@ class LanceDBManager:
         """向量相似度搜索"""
         query = table.search(query_vector).limit(limit).where(filter).to_pandas()
         return query
+=======
+        query = table.search(query_vector).limit(limit).to_pandas()
+        text_list = query["text"].tolist()
+        return text_list
+>>>>>>> baa2edec02e2f83a4119dc782959ba32d2054bf2
     
     '''
     不同索引方式
@@ -134,11 +159,20 @@ class LanceDBManager:
 
     
 
+<<<<<<< HEAD
 def test_vector_search(db_manager):
 
     # 创建测试表
     test_vector = np.random.rand(1024).tolist()
     test_table = db_manager.create_table("test_table2", 1, test_vector, "测试文本")
+=======
+def test_vector_search():
+    db_manager = LanceDBManager()
+
+    # 创建测试表
+    test_vector = np.random.rand(1024).tolist()
+    test_table = db_manager.create_table("test_table2", "1", test_vector, "测试文本")
+>>>>>>> baa2edec02e2f83a4119dc782959ba32d2054bf2
     print("创建表成功，表列表:", db_manager.list_tables())
 
     # 打开表
@@ -175,7 +209,14 @@ def test_vector_search(db_manager):
     # db_manager.delete_table("test_table")
     print("表删除成功，剩余表:", db_manager.list_tables())
 
+<<<<<<< HEAD
 def test_add_data(db_manager):
+=======
+
+
+def test_add_data():
+    db_manager = LanceDBManager()
+>>>>>>> baa2edec02e2f83a4119dc782959ba32d2054bf2
 
     db_manager.create_table("test_table")
     print("创建表成功，表列表:", db_manager.list_tables())
@@ -197,7 +238,11 @@ def test_add_data(db_manager):
 
     # 构建对话记录
     structured_data = {
+<<<<<<< HEAD
         "id": int(readable_time),
+=======
+        "id": str(readable_time),
+>>>>>>> baa2edec02e2f83a4119dc782959ba32d2054bf2
         "category": query["category"],
         "friend_name": query["friend_name"],
         "group_name": query.get("group_name", ""),
@@ -247,6 +292,7 @@ def test_add_data(db_manager):
     json_object = json.loads(results[0])
     print(json_object)
 
+<<<<<<< HEAD
 def test_info_summary(db_manager):
     # query = {
     #     "id": "1739704423283",
@@ -371,3 +417,10 @@ if __name__ == "__main__":
     # test_add_data(db_manager)
     # test_vector_search(db_manager)
     test_daily_summary(db_manager)
+=======
+
+# 测试代码
+if __name__ == "__main__":
+    test_add_data()
+    # test_vector_search()
+>>>>>>> baa2edec02e2f83a4119dc782959ba32d2054bf2
