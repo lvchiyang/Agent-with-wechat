@@ -57,14 +57,14 @@ class LoginApi:
         }
         return post_json(self.base_url, "/login/checkOnline", self.token, param)
 
-    def logout(self, app_id):
-        """退出"""
+    def reconnect(self, app_id): # 有问题
+        """断线重连"""
         param = {
             "appId": app_id
         }
-        return post_json(self.base_url, "/login/logout", self.token, param)
+        return post_json(self.base_url, "/login/reconnection", self.token, param)
 
-    def _get_and_validate_qr(self, app_id):
+    def get_and_validate_qr(self, app_id):
         """获取并验证二维码数据
 
         Args:
@@ -104,25 +104,28 @@ class LoginApi:
         if input_app_id:
             check_online_response = self.check_online(input_app_id)
             if check_online_response.get('ret') == 200 and check_online_response.get('data'):
-                print_green(f"AppID: {input_app_id} 已在线，无需登录")
+                # print_green(f"AppID: {input_app_id} 已在线，无需登录")
                 return input_app_id, ""
-            else:
-                print_yellow(f"AppID: {input_app_id} 未在线，执行登录流程")
+            # else:
+            #     print_yellow(f"AppID: {input_app_id} 未在线，执行登录流程")
 
         # 2. 获取初始二维码
-        app_id, uuid = self._get_and_validate_qr(app_id)
+        app_id, uuid = self.get_and_validate_qr(app_id)
         if not app_id or not uuid:
             return "", "获取二维码失败"
 
         if not input_app_id:
             print_green(f"AppID: {app_id}, 请保存此app_id，下次登录时继续使用!")
-            print_yellow("\n新设备登录平台，次日凌晨会掉线一次，重新登录时需使用原来的app_id取码，否则新app_id仍然会掉线，登录成功后则可以长期在线")
+            # print_yellow("\n新设备登录平台，次日凌晨会掉线一次，重新登录时需使用原来的app_id取码，否则新app_id仍然会掉线，登录成功后则可以长期在线")
 
         make_and_print_qr(f"http://weixin.qq.com/x/{uuid}")
 
         # 自动在浏览器中打开这个二维码
         # webbrowser.open(f"http://weixin.qq.com/x/{uuid}")
+        self.check_login_status(app_id, uuid)
 
+
+    def check_login_status(self, app_id, uuid):
         # 3. 轮询检查登录状态
         retry_count = 0
         max_retries = 100  # 最大重试100次
@@ -140,7 +143,7 @@ class LoginApi:
             # 检查二维码是否过期，提前5秒重新获取
             if expired_time <= 5:
                 print_yellow("二维码即将过期，正在重新获取...")
-                _, uuid = self._get_and_validate_qr(app_id)
+                _, uuid = self.get_and_validate_qr(app_id)
                 if not uuid:
                     return app_id, "重新获取二维码失败"
 

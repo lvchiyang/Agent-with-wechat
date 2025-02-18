@@ -4,6 +4,7 @@ from backend.Memory.memory_manager import MemoryManager
 from backend.LLM.LLM_Client import LLM_Client
 from backend.LLM.prompt_manager import PromptManager
 from backend.Agent.plan import Plan
+import asyncio
 '''
 # Agent需要的变量：
 
@@ -29,17 +30,18 @@ class Agent():
         self.current_state = "idle"  # 添加当前状态
         # 传递memory实例给Plan
         self.plan = Plan(self.update_state, self.memory_manager, self.LLM_Client)
-        # self.loop = asyncio.new_event_loop()
-        # 创建一个锁
-        # self.lock = threading.Lock()
+
 
     def start(self):
         try:
             logger.info("Starting Agent")
-            # 先启动WebSocket服务器
-            self.chat_server.start()
-            # 再启动计划线程
-            self.plan.start()
+            # 创建事件循环并运行异步任务
+            async def main_loop():
+                await asyncio.gather(
+                    asyncio.to_thread(self.plan.start),
+                    asyncio.to_thread(self.chat_server.run)
+                )
+            asyncio.run(main_loop())
             logger.info("Agent started successfully")
         except Exception as e:
             logger.error(f"Error starting Agent: {str(e)}")
@@ -47,11 +49,15 @@ class Agent():
 
     def stop(self):
         """停止Agent,停止所有线程"""
+        logger.info("开始关闭服务...")
         self.chat_server.stop()
         self.plan.stop()
+        # 添加资源清理逻辑
+        if hasattr(self, 'executor'):
+            self.executor.shutdown(wait=False)
+        logger.info("所有服务已停止")
 
     async def handle_message(self, message: dict) -> str:  
-        id = message["id"]
         # 提供上下文
         context = self.memory_manager.new_message(message) 
         related_memories = self.memory_manager.query_context(message)
@@ -60,7 +66,7 @@ class Agent():
 
         self.memory_manager.add_conversation(message, response)
 
-        return {'id': id, 'response': response}
+        return response
 
     def update_state(self, new_state: str):
         """更新Agent状态"""

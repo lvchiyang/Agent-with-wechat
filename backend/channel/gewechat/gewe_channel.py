@@ -1,6 +1,10 @@
 import yaml
+import json
 from pathlib import Path
 from .client import GewechatClient
+from .util.terminal_printer import print_yellow, make_and_print_qr, print_green
+import threading
+import time
 
 class GeweChannel:
     def __init__(self):
@@ -18,21 +22,34 @@ class GeweChannel:
         self.token = self.config['gewechat'].get('token', "")
         self.base_url = self.config['gewechat'].get('base_url', "")
         self.callback_url = self.config['gewechat'].get('callback_url', "")
+        self.wxid = self.config['gewechat'].get('wxid', "")
 
         # 初始化客户端
         self.client = GewechatClient(self.base_url, self.token)
         
-        # 检查登录状态
-        self.check_login_status()
+        # 尝试三次
+        for attempt in range(1, 4):  # 从1到3，尝试3次
+            try:
+                print(f"尝试登录，第 {attempt} 次...")
+                self.wechat_login()  # 调用微信登录方法
+                print("登录成功！")
+                break  # 登录成功后退出循环
+            except Exception as e:
+                print(f"登录失败，第 {attempt} 次: {e}")
+                if attempt == 3:  # 如果是第3次尝试失败
+                    print("已达到最大尝试次数，登录失败。")
+                    raise RuntimeError("登录失败，已达到最大尝试次数。")  # 抛出自定义异常
 
-        # 每次登录，获取通信录群聊字典
-        contacts_list = self.client.fetch_contacts_list(self.app_id).get('data', {}).get('chatrooms', [])
-        self.group_dict = {item: None for item in contacts_list}
-        self.save_group_dict()  # 使用新的保存方法
 
-    def connect(self):
-        # 初始化客户端
-        self.client = self.client.set_callback(self.token, self.callback_url)
+    def connect(self, max_retries=3):
+        for attempt in range(max_retries):
+            try:
+                self.client.set_callback(self.token, self.callback_url)
+                break
+            except Exception as e:
+                if attempt == max_retries-1:
+                    raise
+                time.sleep(1 * (attempt+1))  # 指数退避
 
     def load_config(self):
         """加载配置文件"""
@@ -63,19 +80,54 @@ class GeweChannel:
         with open(self.group_dict_PATH, 'w', encoding='utf-8') as f:
             yaml.safe_dump({'group_dict': self.group_dict}, f, allow_unicode=True)
 
-    def check_login_status(self):
+    def _get_contacts_roomchat(self):
+        """获取通信录群聊字典"""
+        try:
+            contacts_list = self.client.fetch_contacts_list(self.app_id).get('data', {}).get('chatrooms', [])
+            self.group_dict = {item: None for item in contacts_list}
+            self.save_group_dict()  # 使用新的保存方法
+            print_green(f"成功获取通信录群聊")
+        except Exception as e:
+            print(f"获取通信录群聊字典失败: {e}")
+
+
+    def wechat_login(self):
         """检查登录状态，未登录则执行登录流程"""
 
         self.app_id = self.client.login(self.app_id)[0]
         self.token = self.client.get_token().get('data', "")
+        self.wxid = self.client.get_profile(self.app_id).get('data', {}).get('wxid', "")
             
         # 保存新配置
         self.config['gewechat'].update({
             'app_id': self.app_id,
-            'token': self.token
+            'token': self.token,
+            'wxid': self.wxid
         })
         self.save_config()
         print("登录信息已保存至配置文件")
+
+        try:
+            self._get_contacts_roomchat()
+        except Exception as e:
+            e = json.loads(str(e))
+            msg = e.get("data", {}).get("msg", "")
+            # print(msg)
+            if msg == "微信已离线":
+                # uuid = "AfDdSy_jg_rwDUVFoWGM"
+
+                self.client.log_out(self.app_id)
+                # print_yellow("微信已离线，请重新扫描二维码登录")
+                # _, uuid = self.client.get_and_validate_qr(self.app_id)
+                # make_and_print_qr(f"http://weixin.qq.com/x/{uuid}")
+                # self.client.check_login_status(self.app_id, uuid)
+
+                # # self.app_id = self.client.login(self.app_id)[0]
+                # # print(f"重新登录成功，app_id: {self.app_id}")
+
+
+                # self._get_contacts_roomchat()
+
 
     def get_client(self):
         """获取GewechatClient实例"""
@@ -103,50 +155,68 @@ class GeweChannel:
     def parse_message(self, message_dict: dict) -> dict:
         """解析原始消息"""
         try:
+            if message_dict.get("testMsg") == "回调地址链接成功！":
+                return None
             # TypeName = message_dict.get("TypeName", "") # 这个好像没什么用，因为不知道TypeName的含义
+            TypeName = message_dict.get("TypeName", "")
             data = message_dict.get("Data", {})
-            Wxid = group_id = data.get("FromUserName", {}).get("string", "")
+            MsgType = data.get("MsgType", "")
+
+            group_id = data.get("FromUserName", {}).get("string", "")
+            Wxid = group_id
             PushContent = data.get("PushContent", "")
             category = "私聊"
             group_name = ""
             friend_name = ""
             text = ""
+
+            if Wxid == self.wxid:  # 过滤掉来自自己的消息
+                return None
             
-            # 判断是否是群消息
-            if '@' in group_id:
-                # 判断是否是通讯录群消息
-                if group_id in self.group_dict:
-                    group_name = self.group_dict.get(group_id, "")
-                    category = "群聊"
-                    if not group_name:
-                        group_name = self.client.get_chatroom_info(self.app_id, group_id).get('data', {}).get('nickName', "")
-                        self.group_dict[group_id] = group_name
-                        self.save_group_dict()  # 使用新的保存方法
+            if MsgType != 1: # 目前仅支持文本消息
+                return None
+            
+            if TypeName == "AddMsg":
+                # 判断是否是群消息
+                if '@' in group_id:
+                    # 判断是否是通讯录群消息
+                    if group_id in self.group_dict:
+                        group_name = self.group_dict.get(group_id, "")
+                        category = "群聊"
+                        if not group_name:
+                            group_name = self.client.get_chatroom_info(self.app_id, group_id).get('data', {}).get('nickName', "")
+                            self.group_dict[group_id] = group_name
+                            self.save_group_dict()  # 使用新的保存方法
+                    
+                    else: # 非通讯录群消息，丢弃
+                        return None
                 
-                else: # 非通讯录群消息，丢弃
-                    return None
-            
-            # 解析PushContent
-            if ": " in PushContent:
-                friend_name, text = PushContent.split(": ", 1)
-            
-            if text.startswith(self.trigger_prefix):
-                return {
-                    "id": Wxid,
-                    "category": category,
-                    "friend_name": friend_name if friend_name else "",
-                    "group_name": group_name if group_name else "",
-                    "text": text if text else "",
-                }
+                # 解析PushContent
+                if ": " in PushContent:
+                    friend_name, text = PushContent.split(": ", 1)
+                
+                msg = {
+                        "id": Wxid,
+                        "category": category,
+                        "friend_name": friend_name if friend_name else "",
+                        "group_name": group_name if group_name else "",
+                        "text": text if text else "",
+                    }
+                if category == "私聊":
+                    return msg
+                elif text.startswith(self.trigger_prefix):
+                    return msg
+                else:
+                    return None               
 
         except Exception as e:
             print(f"消息解析失败: {e}")
-            return {}
+            return None
         
 
-    def post_text(self, msg: dict):
+    def post_text(self, answer: dict):
         """发送回复的统一入口"""
-        self.client.post_text(self.app_id, msg["id"],msg["text"])
+        self.client.post_text(self.app_id, answer["id"], answer["text"])
 
     # def _handle_message(self, msg: dict):
     #     """处理单条消息"""

@@ -21,10 +21,10 @@ class Plan():
     def __init__(self, state_callback, memory_manager, llm_client):
         self.should_continue = True
         self.plan_thread = threading.Thread(target=self._plan_loop)
+        self.plan_thread.daemon = True
         self.state_callback = state_callback
         self.memory = memory_manager
         self.last_summary_time = time.time()
-        self.plan_thread.daemon = True
         self.llm_client = llm_client
         self.date_of_summary = None
 

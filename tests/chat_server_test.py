@@ -3,7 +3,7 @@ from fastapi.responses import JSONResponse
 import uvicorn
 import traceback
 import threading
-from .gewe_channel import GeweChannel
+from gewe_channel import GeweChannel
 
 config_path = "config/config.yaml"
 
@@ -32,16 +32,8 @@ async def collect(request: Request):
         print(f"收到消息: {data}")
         process_message(data)
         
-        return JSONResponse(
-            content={"status": "received", "message_id": data.get("id")},
-            status_code=202
-        )
-        
     except Exception as e:
-        return JSONResponse(
-            content={"status": "error", "message": str(e)},
-            status_code=500
-        )
+        print(f"消息处理失败: {str(e)}")
 
 def process_message(data: dict):
     try:
@@ -52,7 +44,9 @@ def process_message(data: dict):
         message = channel.parse_message(data)
         if message:
             answer = {"id": "wxid_xyswpdll2tsh22", "response": "处理完成"}
-            channel.post_text(answer)
+            channel.post_text(answer) 
+        else:
+            print("是要被忽略的消息")  
             
     except Exception as e:
         print(f"消息处理失败: {str(e)}")
@@ -62,9 +56,8 @@ def initialize_channel():
     global channel
     try:
         channel = GeweChannel()
-        print("通道初始化成功，开始设置回调...")
-        # channel.connect()
-        print("回调地址设置成功")
+        print("通道初始化成功")
+        channel.connect()
     except Exception as e:
         print(f"初始化失败: {str(e)}")
         traceback.print_exc()

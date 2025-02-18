@@ -6,3 +6,4 @@ gewechat:
   callback_url: http://192.168.31.176:9001/v2/api/callback/collect
   download_url: http://192.168.31.189:2532/download
   token: 11e1669cdffd4cecab2729e1d1838386
+  wxid: wxid_dj13rn8x33i129

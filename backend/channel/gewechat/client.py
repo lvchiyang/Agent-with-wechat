@@ -246,6 +246,14 @@ class GewechatClient:
     def login(self, app_id):
         """登录"""
         return self._login_api.login(app_id)
+    
+    def get_and_validate_qr(self, app_id):
+        """获取并验证二维码"""
+        return self._login_api.get_and_validate_qr(app_id)
+    
+    def check_login_status(self, app_id, uuid):
+        """检查登录状态"""
+        return self._login_api.check_login_status(app_id, uuid)
 
     def get_token(self):
         """获取tokenId"""
@@ -274,10 +282,6 @@ class GewechatClient:
     def check_online(self, app_id):
         """检查是否在线"""
         return self._login_api.check_online(app_id)
-
-    def logout(self, app_id):
-        """退出"""
-        return self._login_api.logout(app_id)
 
     # Message API methods
     def post_text(self, app_id, to_wxid, content, ats: str = ""):
