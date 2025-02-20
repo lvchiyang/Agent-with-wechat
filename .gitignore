@@ -18,5 +18,6 @@ backend/plugins/__pycache__
 backend/plugins/plugins/__pycache__
 backend/plugins/plugins/plugins/__pycache__
 
+backend/channel/__pycache__
 backend/channel/gewechat/__pycache__
 backend/channel/gewechat/api/__pycache__

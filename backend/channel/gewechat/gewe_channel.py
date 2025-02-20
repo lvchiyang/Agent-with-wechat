@@ -19,10 +19,12 @@ class GeweChannel:
         # 初始化配置
         self.trigger_prefix = self.config['filter'].get('trigger_prefix', "")
         self.app_id = self.config['gewechat'].get('app_id', "")
-        self.token = self.config['gewechat'].get('token', "")
         self.base_url = self.config['gewechat'].get('base_url', "")
         self.callback_url = self.config['gewechat'].get('callback_url', "")
         self.wxid = self.config['gewechat'].get('wxid', "")
+
+        # 获取token
+        self.token = GewechatClient.get_token(self.base_url).get('data', "")
 
         # 初始化客户端
         self.client = GewechatClient(self.base_url, self.token)
@@ -36,6 +38,11 @@ class GeweChannel:
                 break  # 登录成功后退出循环
             except Exception as e:
                 print(f"登录失败，第 {attempt} 次: {e}")
+                e = json.loads(str(e))
+                msg = e.get("data", {}).get("msg", "")
+            
+                if msg == "微信已离线":
+                    self.client.log_out(self.app_id)
                 if attempt == 3:  # 如果是第3次尝试失败
                     print("已达到最大尝试次数，登录失败。")
                     raise RuntimeError("登录失败，已达到最大尝试次数。")  # 抛出自定义异常
@@ -80,7 +87,13 @@ class GeweChannel:
         with open(self.group_dict_PATH, 'w', encoding='utf-8') as f:
             yaml.safe_dump({'group_dict': self.group_dict}, f, allow_unicode=True)
 
-    def _get_contacts_roomchat(self):
+    def _get_contacts_roomchat(self):   
+        """获取wwid"""
+        self.wxid = self.client.get_profile(self.app_id).get('data', {}).get('wxid', "")
+        self.config['gewechat'].update({
+            'app_id': self.app_id
+        })
+        self.save_config()
         """获取通信录群聊字典"""
         try:
             contacts_list = self.client.fetch_contacts_list(self.app_id).get('data', {}).get('chatrooms', [])
@@ -95,14 +108,10 @@ class GeweChannel:
         """检查登录状态，未登录则执行登录流程"""
 
         self.app_id = self.client.login(self.app_id)[0]
-        self.token = self.client.get_token().get('data', "")
-        self.wxid = self.client.get_profile(self.app_id).get('data', {}).get('wxid', "")
-            
+
         # 保存新配置
         self.config['gewechat'].update({
-            'app_id': self.app_id,
-            'token': self.token,
-            'wxid': self.wxid
+            'app_id': self.app_id
         })
         self.save_config()
         print("登录信息已保存至配置文件")
@@ -110,23 +119,8 @@ class GeweChannel:
         try:
             self._get_contacts_roomchat()
         except Exception as e:
-            e = json.loads(str(e))
-            msg = e.get("data", {}).get("msg", "")
-            # print(msg)
-            if msg == "微信已离线":
-                # uuid = "AfDdSy_jg_rwDUVFoWGM"
+            print(f"获取通信录群聊字典失败: {e}")
 
-                self.client.log_out(self.app_id)
-                # print_yellow("微信已离线，请重新扫描二维码登录")
-                # _, uuid = self.client.get_and_validate_qr(self.app_id)
-                # make_and_print_qr(f"http://weixin.qq.com/x/{uuid}")
-                # self.client.check_login_status(self.app_id, uuid)
-
-                # # self.app_id = self.client.login(self.app_id)[0]
-                # # print(f"重新登录成功，app_id: {self.app_id}")
-
-
-                # self._get_contacts_roomchat()
 
 
     def get_client(self):
@@ -137,7 +131,6 @@ class GeweChannel:
         """获取当前配置"""
         return {
             'app_id': self.app_id,
-            'token': self.token,
             'base_url': self.base_url,
             'callback_url': self.callback_url
         }

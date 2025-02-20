@@ -4,7 +4,6 @@ from backend.Agent.Agent_class import Agent
 import time
 import signal
 import sys
-import os
 from pathlib import Path
 import logging
 import threading

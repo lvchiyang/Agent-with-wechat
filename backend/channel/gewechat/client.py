@@ -6,6 +6,7 @@ from .api.label_api import LabelApi
 from .api.login_api import LoginApi
 from .api.message_api import MessageApi
 from .api.personal_api import PersonalApi
+from .util.http_util import post_json
 
 class GewechatClient:
     """
@@ -255,9 +256,10 @@ class GewechatClient:
         """检查登录状态"""
         return self._login_api.check_login_status(app_id, uuid)
 
-    def get_token(self):
+    @classmethod
+    def get_token(cls, base_url):
         """获取tokenId"""
-        return self._login_api.get_token()
+        return post_json(base_url, "/tools/getTokenId", {}, {})
 
     def set_callback(self, token, callback_url):
         """设置微信消息的回调地址"""

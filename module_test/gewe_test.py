@@ -53,14 +53,14 @@ if __name__ == "__main__":
     # app_id = "wx_LdauLALCj7rrWlHhdwAZm"
     # token = "881f5e8b13a84509a284c17e429d9ee1" 
     # base_url = "http://192.168.31.189:2531/v2/api"
-    # callback_url = "http://192.168.31.176:9001/v2/api/callback/collect"
+    callback_url = "http://192.168.31.189:9001/v2/api/callback/collect"
     # download_url = "http://192.168.31.189:2532/download"
 
-    cfg = config()
-    # print(cfg.app_id)
-    group_id = "24862693104@chatroom"
+    # cfg = config()
+    # # print(cfg.app_id)
+    # group_id = "24862693104@chatroom"
 
-    client = GewechatClient(cfg.base_url, cfg.token)
+    # client = GewechatClient(cfg.base_url, cfg.token)
 
     # contacts_list = client.fetch_contacts_list(cfg.app_id).get('data', {}).get('chatrooms', [])
     # cfg.group_dict = {item: None for item in contacts_list}
@@ -79,8 +79,8 @@ if __name__ == "__main__":
     # cfg.group_dict.append({"248626troom": group_name})
     # cfg.save_group_dict()  # 使用新的保存方法
     
-    answer = {"id": "wxid_xyswpdll2tsh22", "response": "处理完成"}
+    # answer = {"id": "wxid_xyswpdll2tsh22", "response": "处理完成"}
 
-    wxid = "wxid_xyswpdll2tsh22"
-    post_text = client.post_text(cfg.app_id, answer["id"], answer["response"])
-    print(post_text)
+    # wxid = "wxid_xyswpdll2tsh22"
+    # post_text = client.post_text(cfg.app_id, answer["id"], answer["response"])
+    # print(post_text)
