@@ -83,7 +83,7 @@ class LLM_Client:
             enable_search=enable_search,
             response_format=response_format
         )
-        logger.info(f"LLM调用成功，响应内容: {response}")
+        # logger.info(f"LLM调用成功，响应内容: {response}")
 
         return response
 

@@ -3,9 +3,10 @@ uvicorn
 pathlib
 openai
 pypinyin
-lancedb>=0.6.0
-numpy>=1.21.0
+lancedb
+numpy
 requests>=2.31.0
 qrcode
 pyyaml
 pytz
+pillow

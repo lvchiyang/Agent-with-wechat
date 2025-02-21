@@ -7,11 +7,6 @@ llm:
     openai:
       api_key: "sk-xxx"
       model: "gpt-4"
-      
-character:
-  personality_path: "./character/persona_config.yaml"
-  memory_size: 20 
-  memory_path: "./backend/Memory"  # 添加记忆存储路径
 
 performance:
   use_gpu: false

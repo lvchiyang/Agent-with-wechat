@@ -1,17 +1,15 @@
 import os
 import json  # 添加json库用于序列化
-import pytz
 import logging
 import time
 import asyncio
-import lancedb
 from pathlib import Path
 from datetime import datetime, timedelta
 from typing import List, Dict
 from backend.plugins.get_time import get_current_time
 from datetime import datetime, timedelta
-from backend.Memory.LanceDB_Manager import LanceDBManager
-
+# from backend.Memory.LanceDB_Manager import LanceDBManager
+from backend.Memory.ChromaDB_Manager import ChromaDBManager
 '''
 请注意，修改代码的时候，不要动这篇代码里的注释
 '''
@@ -20,9 +18,10 @@ from backend.Memory.LanceDB_Manager import LanceDBManager
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-# 设置 LanceDB 存储路径
-lance_path = Path("backend/Memory/Agent1_LanceDB")
-os.makedirs(lance_path, exist_ok=True)
+
+# 获取项目根目录
+save_path = str(Path(__file__).resolve().parent / "Agent_VectorDB")  # 转换为字符串路径
+os.makedirs(save_path, exist_ok=True)
 
 '''
 context的对话格式
@@ -52,27 +51,13 @@ context的对话格式
 class MemoryManager:
     def __init__(self, LLM_Client):
         self.LLM_Client = LLM_Client
-        self.lance_db = LanceDBManager(lance_path)
+        # self.lance_db = LanceDBManager(save_path)
+        self.chroma_db = ChromaDBManager(save_path)
         # 移除非线程安全的事件循环代码
         self.last_interacted = {"friend_name": "", "group_name": ""}
         self.context: List[Dict] = []
         self.friend_daily_tasks = {}
 
-
-    def create_or_open_table(self, table_name: str) -> lancedb.table.Table: # 通过名，返回一个table对象
-        """统一表管理方法"""
-        # 自动创建不存在的表
-        table_name = self.lance_db.name_to_pinyin(table_name)
-        if table_name not in self.lance_db.list_tables():
-            # 使用LLM生成初始嵌入向量
-            self.lance_db.create_table(
-                table_name = table_name, # 所有的表都按对话对象的名称存取
-                id = 1 , # 将个人信息的id设置为profile
-            )
-        return self.lance_db.open_table(table_name)
-    
-    def open_table(self, table_name: str) -> lancedb.table.Table: # 通过名，返回一个table对象
-        return self.lance_db.open_table(table_name)
 
     def new_message(self, message: str) -> str:
         """处理新消息，提供上下文"""
@@ -156,20 +141,22 @@ class MemoryManager:
             else:
                 category = table_name = self.last_interacted["friend_name"]
 
-            if table_name not in self.lance_db.list_tables():
-                # 使用LLM生成初始嵌入向量
-                table = self.lance_db.create_table(table_name = table_name,
-                                        id = 1 ,
-                                        category = category) # 将个人信息的id设置为profile
-            else:                          
-                table = self.lance_db.open_table(table_name)
+            table_name = self.chroma_db.name_to_pinyin(table_name)
+                      
+            # table = self.lance_db.open_or_create_table(table_name)
+            table = self.chroma_db.open_or_create_collection(table_name)
             
             # 插入数据库
-            self.lance_db.add_data(table, 
+            # self.lance_db.add_data(table, 
+            #                        id=int(time.time()), 
+            #                        vector=embedding, 
+            #                        text=context_str)
+            
+            self.chroma_db.add_data(table, 
                                    id=int(time.time()), 
                                    vector=embedding, 
                                    text=context_str)
-            
+            print("上下文归档成功")
             # # 新增数据之后，新增索引
             # if self.lance_db.get_table_count(table) < 100:
             #     self.lance_db.create_vector_index_1(table)
@@ -184,26 +171,36 @@ class MemoryManager:
         """增强版上下文查询"""
         try:
             # 自动选择对应的表
-            table_name = message["friend_name"] if not message["category"] == "群聊" else message["group_name"]
-            table_name = self.lance_db.name_to_pinyin(table_name)
+            name = message["friend_name"] if not message["category"] == "群聊" else message["group_name"]
+            
+            # table_name = self.lance_db.name_to_pinyin(table_name)
+            table_name = self.chroma_db.name_to_pinyin(name)
+
             # 检查表是否存在
-            if table_name not in self.lance_db.list_tables():
-                logger.info(f"记忆中尚且没有和{table_name}相关的信息")
+            # if table_name not in self.lance_db.list_tables():
+            if table_name not in self.chroma_db.list_collections():
+                logger.info(f"记忆中尚且没有和{name}相关的信息")
                 return [{"记忆中尚且没有相关信息"}]
             else:
-                table = self.lance_db.open_table(table_name)
+                # table = self.lance_db.open_or_create_table(table_name)
+                table = self.chroma_db.open_or_create_collection(table_name)
+
                 context_str = json.dumps(message, ensure_ascii=False)
 
                 # 生成查询向量
                 query_embedding = self.LLM_Client.get_embedding(context_str) if message else [0.0]*1024
                 
-                # 执行向量搜索
-                return self.lance_db.vector_search(
-                    table=table,
+                # # 执行向量搜索
+                # return self.chroma_db.vector_search(
+                #     table=table,
+                #     query_vector=query_embedding,
+                #     limit=5
+                # )
+                return self.chroma_db.vector_search(
+                    collection=table,
                     query_vector=query_embedding,
                     limit=5
                 )
-            
         except Exception as e:
             logger.error(f"上下文查询失败: {str(e)}")
             return []
@@ -216,7 +213,7 @@ class MemoryManager:
 
     #         # 遍历所有表进行维护
     #         for table_name in self.lance_db.list_tables():
-    #             table = self.lance_db.db.open_table(table_name)
+    #             table = self.lance_db.db.open_or_create_table(table_name)
     #             # 清理过期数据（示例保留30天内数据）
     #             table.delete(f"metadata['timestamp'] < '{datetime.now() - timedelta(days=30)}'")
 
@@ -224,40 +221,56 @@ class MemoryManager:
 
 
     async def daily_summary(self):
-        tables = self.lance_db.list_tables()
-        yesterday_end = int((datetime.now() - timedelta(days=1)).replace(hour=23, minute=59, second=59).timestamp())
-        query = f"id > {yesterday_end}"
+        tables = self.chroma_db.list_collections()
+        yesterday_end = int((datetime.now() - timedelta(days=1)).replace(hour=23, minute=59, second=59).timestamp()) # 截至昨天最后1秒
 
         for table_name in tables:
-            """信息总结更新"""
-            table = self.lance_db.open_table(table_name)
-            
-            # 查询当天数据
-            today_results = self.lance_db.vector_search(table, filter = query)
-            profile = self.lance_db.table_search(table, filter = f"id = 1")
-            category = profile["category"]
-            profile = profile["text"]
-
-            # 生成总结提示
-            prompt = f"""请从今日与{category}的对话中提取重要个人信息：        
-            要求：
-            1. 只返回总结更新之后的信息，内容保持简洁不要输出其他无关内容，回答中不需要对你的更改做任何说明
-            2. 为今日总结的信息添加时间戳标签用来区分信息的时间
-            3. 如果今日没有对话记录，则将已知信息返回
-            4. 不要丢失之前的已知信息，除非相同的内容产生更新，将重复的内容删掉
-
-            已知信息：{profile}
-            今日对话记录：{today_results}
-            """
-            
             try:
-                response = await self.LLM_Client.chat(prompt)
-                embedding = self.LLM_Client.get_embedding(response)
-                # 更新个人信息
-                self.lance_db.update_data(
-                    table,
-                    f"id == 1",  # 修改为更新profile记录
-                    {"text": response, "vector": embedding}
-                )
+                table = self.chroma_db.open_or_create_collection(table_name)
+                today_results = self.chroma_db.time_search(table, yesterday_end)
+                
+                # 添加空结果检查
+                if not today_results:  # 如果当天没有对话记录
+                    logger.info(f"{table_name} 今日无新对话，跳过总结")
+                    continue
+
+                # 添加安全访问检查
+                profile = self.chroma_db.id_search(table, 1)
+                if not profile or "category" not in profile or "text" not in profile:
+                    profile_text = "记忆中暂无相关信息"
+                    logger.warning(f"{table_name}:{profile_text}")
+                else:
+                    # 添加类型检查
+                    profile_text = profile.get("text", "暂无已知信息")
+
+                prompt = f"""请从今日的对话中提取重要信息：        
+                要求：
+                1. 只返回总结更新之后的信息，内容保持简洁不要输出其他无关内容，回答中不需要对你的更改做任何说明
+                2. 为今日总结的信息添加时间戳标签用来区分信息的时间
+                3. 如果今日没有对话记录，则将已知信息返回
+                4. 不要丢失之前的已知信息，除非相同的内容产生更新，将重复的内容删掉
+
+                已知信息：{profile_text}
+                今日对话记录：{today_results}
+                """
+                
+                try:
+                    response = await self.LLM_Client.chat(prompt)
+                    print(f"response: {response}")
+                    if not response:
+                        logger.warning("LLM返回空响应")
+                        continue
+                        
+                    embedding = self.LLM_Client.get_embedding(response)
+                    self.chroma_db.data_upsert(
+                        table,
+                        vector=embedding,
+                        text=response
+                    )
+                except Exception as e:
+                    logger.error(f"每日总结失败: {str(e)}")
+                
+            except IndexError as e:
+                logger.error(f"处理 {table_name} 时发生索引越界: {str(e)}")
             except Exception as e:
-                logger.error(f"每日总结失败: {str(e)}")
+                logger.error(f"处理 {table_name} 时发生未知错误: {str(e)}")

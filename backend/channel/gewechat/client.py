@@ -261,6 +261,7 @@ class GewechatClient:
         """获取tokenId"""
         return post_json(base_url, "/tools/getTokenId", {}, {})
 
+
     def set_callback(self, token, callback_url):
         """设置微信消息的回调地址"""
         return self._login_api.set_callback(token, callback_url)

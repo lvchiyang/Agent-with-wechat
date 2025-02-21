@@ -36,7 +36,7 @@ class LanceDBManager:
         pinyin_str = pinyin_str.replace(" ", "")
         return pinyin_str
         
-    def create_table(self, table_name: str, id: int , vector: List[float] = [0.0] * 1024, text: str = "", image: str = None, category: str = None) -> lancedb.table.Table:
+    def create_table(self, table_name: str, id: int , vector: List[float] = [0.0] * 1024, text: str = "", image: str = None, category: str = None):
         table_name = self.name_to_pinyin(table_name)
         """创建表并插入初始数据"""
         data = [
@@ -50,15 +50,24 @@ class LanceDBManager:
         ]
         return self.db.create_table(table_name, data, mode="overwrite")
     
-    def open_table(self, table_name: str) -> lancedb.table.Table:
-        table_name = self.name_to_pinyin(table_name)
-        """打开表"""
-        return self.db.open_table(table_name)   
     
     def get_table_count(self, table: lancedb.table.Table) -> int:
         """获取表数据量"""
         return table.count_rows()
     
+    def open_or_create_table(self, table_name: str) -> lancedb.table.Table: # 通过名，返回一个table对象
+        """统一表管理方法"""
+        # 自动创建不存在的表
+        table_name = self.name_to_pinyin(table_name)
+        if table_name not in self.list_tables():
+            # 使用LLM生成初始嵌入向量
+            self.create_table(
+                table_name = table_name, # 所有的表都按对话对象的名称存取
+                id = 1 , # 将个人信息的id设置为profile
+            )
+        return self.db.open_table(table_name)  
+    
+
     def close_table(self, table: lancedb.table.Table) -> None:
         """关闭表"""
         table.close()
@@ -259,17 +268,17 @@ def test_info_summary(db_manager):
     # query_str = json.dumps(query, ensure_ascii=False)
     # table = db_manager.create_table("test_table1",1,[0.1, 0.2, 0.3],query_str)
     # db_manager.add_data(table, int(time.time()), [0.1, 0.2, 0.3], "测试文本")
-    # time.sleep(2)
+    # await asyncio.sleep(2)
     # db_manager.add_data(table, int(time.time()), [0.1, 0.2, 0.3], "测试文本")
-    # time.sleep(2)
+    # await asyncio.sleep(2)
     # db_manager.add_data(table, int(time.time()), [0.1, 0.2, 0.3], "测试文本")
-    # time.sleep(2)
+    # await asyncio.sleep(2)
     
     # table2 = db_manager.create_table("test_table2",1,[0.1, 0.2, 0.3],query_str)
     # db_manager.add_data(table2, int(time.time()), [0.1, 0.2, 0.3], "测试文本")
-    # time.sleep(2)
+    # await asyncio.sleep(2)
     # db_manager.add_data(table2, int(time.time()), [0.1, 0.2, 0.3], "测试文本")
-    # time.sleep(2)
+    # await asyncio.sleep(2)
     # db_manager.add_data(table2, int(time.time()), [0.1, 0.2, 0.3], "测试文本")
 
 
@@ -367,7 +376,7 @@ if __name__ == "__main__":
     os.makedirs(chroma_path, exist_ok=True)  # 确保目录存在
     db_manager = LanceDBManager(chroma_path)
 
+    test_vector_search(db_manager)
     # test_info_summary(db_manager)
     # test_add_data(db_manager)
-    # test_vector_search(db_manager)
-    test_daily_summary(db_manager)
+    # test_daily_summary(db_manager)

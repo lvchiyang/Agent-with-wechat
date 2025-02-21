@@ -1,7 +1,7 @@
 # encoding:utf-8
 
 import time
-
+import asyncio
 import openai
 import openai.error
 from bot.bot import Bot
