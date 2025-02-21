@@ -1,12 +1,11 @@
-import threading
-import time
+import asyncio
 import logging
 
 logger = logging.getLogger(__name__)
 
 
-def work():
+async def work():
     print(f"正在工作")
     # 模拟耗时任务
-    time.sleep(200) # ← 这里也会释放GIL
+    await asyncio.sleep(3600) # ← 这里也会释放GIL
     print(f"工作结束") 

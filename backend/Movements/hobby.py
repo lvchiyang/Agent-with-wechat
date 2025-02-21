@@ -1,8 +1,8 @@
-import time
+import asyncio
 
-def hobby():
+async def hobby():
     print(f"正在玩")
     # 模拟耗时任务
-    time.sleep(200) # ← 这里也会释放GIL
+    await asyncio.sleep(3600) # ← 这里也会释放GIL
     print(f"爱好结束")
     

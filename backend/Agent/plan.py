@@ -20,74 +20,61 @@ logger = logging.getLogger(__name__)
 class Plan():
     def __init__(self, state_callback, memory_manager, llm_client):
         self.should_continue = True
-        self.plan_thread = threading.Thread(target=self._plan_loop)
-        self.plan_thread.daemon = True
         self.state_callback = state_callback
         self.memory = memory_manager
         self.last_summary_time = time.time()
         self.llm_client = llm_client
         self.date_of_summary = None
 
-    def _plan_loop(self): # 就要在线程中，调用异步函数
-        loop = asyncio.new_event_loop()  # 创建新的事件循环
-        asyncio.set_event_loop(loop)  # 设置为当前线程的事件循环
 
-        async def main_loop():
-            while self.should_continue:
-                try:
-                    plan = await self.get_plan_from_llm()
-                    await self.excute_plan(plan)
-                except Exception as e:
-                    logger.error(f"计划执行出错: {str(e)}")
-                await asyncio.sleep(100)
+    async def plan_loop(self):
+        while self.should_continue:
+            await asyncio.sleep(5)
+            try:
+                plan = await self.get_plan_from_llm()
+                await self.excute_plan(plan)
+            except Exception as e:
+                logger.error(f"计划执行出错: {str(e)}")
 
-
-        loop.run_until_complete(main_loop())
-        loop.close()
-
-    def start(self):
-        """启动计划线程"""
-        if not self.plan_thread.is_alive():
-            self.plan_thread.start()
-            logger.info("Plan thread started")
-
-    def stop(self):
-        """停止计划线程"""
-        self.should_continue = False
-        if self.plan_thread.is_alive():
-            self.plan_thread.join(timeout=5)  # 等待线程结束
-            if self.plan_thread.is_alive():  # 这里还是有问题
-                logger.warning("Plan thread did not stop gracefully")
-            else:
-                logger.info("Plan thread stopped successfully")
 
     async def get_plan_from_llm(self):
         """从LLM获取计划任务"""
         if self.date_of_summary != get_current_day():
-            summary_task = "今日尚未完成总结"
+            prompt = f"""
+            你是一个任务规划助手，请从以下可选任务当中，请根据当前时间选择最合适的任务；：
+            1. work - 工作
+            2. hobby - 兴趣爱好
+            3. relax - 休息
+            4. summary - 总结
+                    
+            当前时间：{get_current_time()}
+
+            要求：
+            1. 以JSON格式返回，例如：{{"plan": "work"}}
+            2. 除了json，不要输出其他内容
+            3. summary任务仅在下午15-17点执行；
+            """
+
         else:
-            summary_task = "今日已完成总结"
+            prompt = f"""
+            你是一个任务规划助手，请从以下可选任务当中，请根据当前时间选择最合适的任务；：
+            1. work - 工作
+            2. hobby - 兴趣爱好
+            3. relax - 休息
+                    
+            当前时间：{get_current_time()}
 
-        prompt = f"""
-        你是一个智能助手，请从以下可选任务当中，请根据当前时间选择最合适的任务：
-        1. work - 工作
-        2. hobby - 兴趣爱好
-        3. relax - 休息
-        4. summary - 每天只进行一次总结（仅在下午15-17点执行）{summary_task}
-                
-        当前时间：{get_current_time()}
+            要求：
+            1. 以JSON格式返回，例如：{{"plan": "work"}}
+            2. 除了json，不要输出其他内容
+            """
 
-        要求：
-        1. 以JSON格式返回，例如：{{"plan": "work"}}
-        2. 除了json，不要输出其他内容
-        """
         
         try:
             response = await self.llm_client.chat(
                 prompt, 
                 response_format={"type": "json_object"}
             )
-             
             return response
         except Exception as e:
             logger.error(f"获取计划时出错: {str(e)}")
@@ -110,11 +97,11 @@ class Plan():
 
         """对llm返回的计划进行执行"""
         if plan == "work":
-            work.work()
+            await work.work()
         elif plan == "hobby":
-            hobby.hobby()
+            await hobby.hobby()
         elif plan == "relax":
-            relax.relax()
+            await relax.relax()
         elif plan == "summary":
             self.date_of_summary = get_current_day()
             await self.memory.daily_summary()

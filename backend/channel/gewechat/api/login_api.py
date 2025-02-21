@@ -1,7 +1,8 @@
 from ..util.terminal_printer import make_and_print_qr, print_green, print_yellow, print_red
 from ..util.http_util import post_json
-import time
+import asyncio
 import webbrowser
+import time
 
 class LoginApi:
     def __init__(self, base_url, token):
@@ -105,9 +106,10 @@ class LoginApi:
             check_online_response = self.check_online(input_app_id)
             if check_online_response.get('ret') == 200 and check_online_response.get('data'):
                 # print_green(f"AppID: {input_app_id} 已在线，无需登录")
-                return input_app_id, ""
-            # else:
-            #     print_yellow(f"AppID: {input_app_id} 未在线，执行登录流程")
+                return input_app_id, "已在线，无需登录"
+            else:
+                print_yellow(f"未在线，执行登录流程")
+                app_id = '' # 手机上退出，这里就可以登录新账号了
 
         # 2. 获取初始二维码
         app_id, uuid = self.get_and_validate_qr(app_id)
@@ -122,7 +124,7 @@ class LoginApi:
 
         # 自动在浏览器中打开这个二维码
         # webbrowser.open(f"http://weixin.qq.com/x/{uuid}")
-        self.check_login_status(app_id, uuid)
+        return self.check_login_status(app_id, uuid)
 
 
     def check_login_status(self, app_id, uuid):
@@ -134,7 +136,7 @@ class LoginApi:
             login_status = self.check_qr(app_id, uuid, "")
             if login_status.get('ret') != 200:
                 print_red(f"检查登录状态失败: {login_status}")
-                return app_id, f"检查登录状态失败: {login_status}"
+                return app_id, "检查登录状态失败"
 
             login_data = login_status.get('data', {})
             status = login_data.get('status')

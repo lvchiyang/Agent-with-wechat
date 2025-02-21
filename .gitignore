@@ -2,22 +2,9 @@
 # frontend
 
 # Backend specific
-backend/__pycache__
-backend/Memory/__pycache__
+**/_pycache_/
 backend/Memory/lancedb_data
 backend/Memory/Agent1_LanceDB
-
-backend/LLM/__pycache__
 backend/LLM/other
-
 backend/voice
-
-backend/Agent/__pycache__
-backend/Movements/__pycache__
-backend/plugins/__pycache__
-backend/plugins/plugins/__pycache__
-backend/plugins/plugins/plugins/__pycache__
-
-backend/channel/__pycache__
-backend/channel/gewechat/__pycache__
-backend/channel/gewechat/api/__pycache__
+backend/channel/gewechat/tmp

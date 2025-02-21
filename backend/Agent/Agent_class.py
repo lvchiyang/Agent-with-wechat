@@ -1,10 +1,12 @@
 import logging
+import sys
 from backend.channel.chat_server import ChatServer
 from backend.Memory.memory_manager import MemoryManager
 from backend.LLM.LLM_Client import LLM_Client
 from backend.LLM.prompt_manager import PromptManager
 from backend.Agent.plan import Plan
 import asyncio
+import threading
 '''
 # Agent需要的变量：
 
@@ -21,63 +23,76 @@ logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 
-class Agent():
+class Agent(threading.Thread):
     def __init__(self):
+        super().__init__()  # 调用父类的 __init__ 方法
         self.LLM_Client = LLM_Client()
         self.memory_manager = MemoryManager(self.LLM_Client)
         self.prompt_manager = PromptManager()
-        self.chat_server = ChatServer(self.handle_message)
+        self.new_message = asyncio.Event()  
+        self.chat_server = ChatServer(self.handle_message,self.new_message)
         self.current_state = "idle"  # 添加当前状态
-        # 传递memory实例给Plan
-        self.plan = Plan(self.update_state, self.memory_manager, self.LLM_Client)
+        self.plan = Plan(self.update_state, self.memory_manager, self.LLM_Client) # 传递memory实例给Plan
 
 
-    def start(self):
+    async def _run_server_in_thread(self):
+        """
+        在后台线程中运行 Uvicorn 服务器
+        """
+        loop = asyncio.get_running_loop()
+        await loop.run_in_executor(None, self.chat_server.run_server)  # 使用线程池运行阻塞式函数
+
+    async def main_loop(self):  # 主事件循环
+        await asyncio.gather(
+            self.chat_server.message_processor(),
+            self._run_server_in_thread(),
+            self.chat_server.init_gewechat_channel(),
+            self.plan.plan_loop()
+        )
+
+    def run(self):
         try:
-            logger.info("Starting Agent")
+            # logger.info("正在创建 Agent")
             # 创建事件循环并运行异步任务
-            async def main_loop():
-                await asyncio.gather(
-                    asyncio.to_thread(self.plan.start),
-                    asyncio.to_thread(self.chat_server.run)
-                )
-            asyncio.run(main_loop())
-            logger.info("Agent started successfully")
+            asyncio.run(self.main_loop())
         except Exception as e:
             logger.error(f"Error starting Agent: {str(e)}")
             self.stop()
 
-    def stop(self):
-        """停止Agent,停止所有线程"""
-        logger.info("开始关闭服务...")
-        self.chat_server.stop()
-        self.plan.stop()
-        # 添加资源清理逻辑
-        if hasattr(self, 'executor'):
-            self.executor.shutdown(wait=False)
-        logger.info("所有服务已停止")
 
     async def handle_message(self, message: dict) -> str:  
         # 提供上下文
         context = self.memory_manager.new_message(message) 
         related_memories = self.memory_manager.query_context(message)
-        prompt_manager = self.prompt_manager.get_system_prompt(related_memories, context, self.current_state)        
-        response = await self.LLM_Client.chat(system_prompt = prompt_manager, user_input = message["text"], enable_search=True)
-
+        system_prompt = self.prompt_manager.get_system_prompt(related_memories, context, self.current_state)        
+        user_prompt = self.prompt_manager.get_user_prompt(message)        
+        response = await self.LLM_Client.chat(system_prompt = system_prompt, user_input = user_prompt, enable_search=True)
         self.memory_manager.add_conversation(message, response)
-
         return response
 
     def update_state(self, new_state: str):
         """更新Agent状态"""
         old_state = self.current_state
         self.current_state = new_state
-        logger.info(f"Agent状态更新: {old_state} -> {new_state}")
-        # 这里可以添加状态变化时的其他处理逻辑
+        print(f"Agent状态更新: {old_state} -> {new_state}")
+        
 
 
-
-
+    def stop(self):
+        """停止Agent,停止所有线程"""
+        logger.info("开始关闭服务...")
+        try:
+            loop = asyncio.get_running_loop()  # 获取当前事件循环
+            tasks = asyncio.all_tasks(loop)  # 获取所有正在运行的任务
+            for task in tasks:  # 取消所有任务
+                task.cancel()
+            sys.exit(0)
+        except RuntimeError as e:
+            if "no running event loop" in str(e):
+                logger.info("事件循环已关闭，无需额外操作")
+            else:
+                logger.error(f"停止服务时发生异常: {str(e)}")
+        logger.info("所有服务已停止")
 
 
 

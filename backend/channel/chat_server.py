@@ -8,88 +8,95 @@ import uvicorn
 from .gewechat.gewe_channel import GeweChannel
 import re
 from urllib.parse import urlparse
+from fastapi.middleware.cors import CORSMiddleware
+import json
+import logging
+import time
 
-class ChatServer(threading.Thread):
-    def __init__(self, message_callback):
-        super().__init__(daemon=True)
+logger = logging.getLogger(__name__)
+
+class ChatServer():
+    def __init__(self, message_callback, new_message):
+        self.message_callback = message_callback
         self.channel = GeweChannel()
-        
-        # 解析URL参数
-        parsed = urlparse(self.channel.callback_url)
-        self.server_port = parsed.port or 80  # 默认端口80
-        self.api_path = parsed.path  # 获取路径如 /v2/api/callback/collect
-
-        # 验证路径格式
-        if not re.match(r"^/[\w/-]+$", self.api_path):
-            raise ValueError(f"Invalid API path: {self.api_path}")
-
         self.message_queue = asyncio.Queue()
         self.app = FastAPI()
+        parsed = urlparse(self.channel.callback_url) # 解析URL参数
+        self.server_port = parsed.port or 9001  
+        self.api_path = parsed.path.rstrip('/') or '/v2/api/callback/collect'  # 默认路径
+        self.server = None  
+        # self.new_message = asyncio.Event()  
+        self.running = True
+        self.new_message = new_message
         self._setup_routes()
-        self.message_callback = message_callback
-        self.running = False
-        self.server_started_event = asyncio.Event()  # 新增启动完成事件
 
     def _setup_routes(self):
-        # 动态配置路由路径
-        @self.app.post(self.api_path)
-        async def receive_message(request: Request):
-            data = await request.json()
-            await self.message_queue.put(data)
-            return JSONResponse({"status": "received"})
+        # 添加路由定义
+        @self.app.post("/v2/api/callback/collect")
+        async def handle_callback(request: Request):  # 移除了self参数
+            try:
+                data = await request.json()
+                # print(f"收到消息: {data}")
+                
+                # 测试消息处理
+                if data.get("testMsg"):
+                    if data["testMsg"] == "回调地址链接成功！":
+                        return self._format_response(200, "连接成功", {
+                            "server_info": f"running on port {self.server_port}"
+                        })
+                    return self._format_response(400, "无效的测试消息")
+                
+                await self.message_queue.put(data)
+                self.new_message.set()
+                # print("消息已接收")
 
-    async def _message_processor(self):
+                # 立即返回接收成功响应
+                return self._format_response(200, "消息已接收", {"status": "processing"})
+                
+            except json.JSONDecodeError as e:
+                logger.error(f"JSON解析失败: {str(e)}")
+                return self._format_response(400, "无效的JSON格式")
+            except Exception as e:
+                logger.critical(f"未处理的全局异常: {str(e)}", exc_info=True)
+                return self._format_response(500, "服务器内部错误", {"exception": str(e)})
+
+    def run_server(self):
+        self.new_message.set()
+        uvicorn.run(self.app, host="0.0.0.0", port=9001)
+
+
+    async def message_processor(self):
         """消息处理协程"""
         while self.running:
-            if not self.message_queue.empty():
+            await self.new_message.wait()
+            while not self.message_queue.empty():
                 message = await self.message_queue.get()
-                await self._process_message(message)
-            await asyncio.sleep(1)  # 防止CPU占用过高
+                try:
+                    parsed_msg = self.channel.parse_message(message)
+                    print(f"正在处理消息: {parsed_msg}")
+                    if parsed_msg:
+                        try:
+                            response = await self.message_callback(parsed_msg)
+                            self.channel.post_text(parsed_msg['id'], response)
+                        except Exception as e:
+                            logger.error(f"消息处理链异常: {str(e)}", exc_info=True)
+                except Exception as e:
+                    print(f"Error processing message: {str(e)}")
 
-    async def _process_message(self, message: Dict[str, Any]):
-        """实际处理消息的逻辑"""
+    async def init_gewechat_channel(self):
         try:
-            parsed_msg = self.channel.parse_message(message)
-            if parsed_msg:
-                response = await self.message_callback(parsed_msg)
-                response = {"id": parsed_msg['id'], "text": str(response)}
-                self.channel.post_text(response)
-            
+            print("开始初始化微信通道...")
+            self.channel.login()
+            await asyncio.sleep(1)
+            await self.channel.connect()
         except Exception as e:
-            print(f"Error processing message: {str(e)}")
+            logger.error(f"微信通道初始化失败: {str(e)}")
 
-    async def _run_server(self):
-        """启动FastAPI服务器"""
-        config = uvicorn.Config(
-            app=self.app,
-            host="0.0.0.0",
-            port=self.server_port,  # 使用解析的端口
-            log_level="info"
-        )
-        server = uvicorn.Server(config)
-        await server.serve()
-        self.server_started_event.set()  # 服务器启动后触发事件
-
-    async def _main_loop(self):
-        """主事件循环"""
-        self.running = True
-        server_task = asyncio.create_task(self._run_server())
-        processor_task = asyncio.create_task(self._message_processor())
-        
-        # 等待服务器启动完成
-        await self.server_started_event.wait()
-        
-        # 服务器启动后立即连接
-        self.channel.connect()
-        
-        processor_task = asyncio.create_task(self._message_processor())
-        await asyncio.gather(server_task, processor_task)
-
-    def run(self):
-        """线程入口点"""
-        asyncio.run(self._main_loop())
-        print("ChatServer run")
-
-    def stop(self):
-        """停止服务器"""
-        self.running = False
+    def _format_response(self, ret: int, msg: str, data=None):
+        return JSONResponse({
+            "ret": ret,
+            "msg": msg,
+            "data": data or {},
+            "server_port": self.server_port,
+            "api_path": self.api_path
+        })

@@ -1,0 +1,8 @@
+filter:
+  trigger_prefix: /
+gewechat:
+  app_id: wx_lYY4PV314Z2fI4hLfkXB8
+  base_url: http://192.168.31.189:2531/v2/api
+  callback_url: http://192.168.31.189:9001/v2/api/callback/collect
+  download_url: http://192.168.31.189:2532/download
+  wxid: wxid_dj13rn8x33i129
