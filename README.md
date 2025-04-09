@@ -4,7 +4,7 @@
 
 ### 1. 后端架构
 - **大模型接口层**：将云端大模型功能解耦，支持多个模型切换
-  - 位置：backend/bot/下的不同文件夹
+  - 位置：backend/LLM/下的不同文件夹
   - 统一LLM API接口供Agent调用
   - 当前支持：阿里通义千问，可扩展其他模型
 
@@ -15,8 +15,7 @@
   - 集成角色管理、情感分析、记忆管理等模块
 
 - **核心模块**
-  - 角色管理：管理AI女友人设 (backend/character)
-  - 情感分析：分析用户情绪 (backend/modules/emotion_analyzer.py)
+  - 角色管理：管理Agent人设 (Agent-with-wechat\backend\config\persona_config.yaml)
   - 记忆管理：维护对话历史 (backend/modules/memory_manager.py)
 
 ### 2. 前端架构
@@ -27,7 +26,7 @@
 ## 快速开始
 
 ### 1. 配置
-编辑 backend/config/settings.yaml:
+编辑 Agent-with-wechat\backend\config:
 yaml
 llm:
 active: ali_qwen # 选择使用的模型
@@ -38,8 +37,7 @@ api_key: "your_api_key"
 
 ### 2. 启动服务
 bash
-cd backend
-python main.py
+python Agent_hall.py
 
 
 ### 3. 访问前端
@@ -53,13 +51,12 @@ python main.py
 
 ## 项目结构
 Agent-with-wechat/
-├── backend/ # 后端代码
-│ ├── Agent/ # Agent主程序
-│ ├── config/ # 配置文件
-│ ├── character/ # 角色设定
-├── frontend/ # 前端代码
-└── requirements.txt # 依赖列表
+backend/ # 后端代码
+ -Agent/ # Agent主程序
+ -config/ # 配置文件
+frontend/ # 前端代码
+Agent_hall.py 主程序入口
+requirements.txt # 依赖列表
 
 ## 依赖安装
-
-在启动项目前，请确保已安装所有依赖：
+在启动项目前，请确保已安装所有依赖
