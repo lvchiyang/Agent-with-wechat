@@ -5,6 +5,7 @@ from chromadb.api.types import Documents, EmbeddingFunction, Embeddings
 from pypinyin import pinyin, Style
 import logging
 import os
+import os
 
 logger = logging.getLogger(__name__)
 
