@@ -1,5 +1,6 @@
 import logging
 import sys
+import sys
 from backend.channel.chat_server import ChatServer
 from backend.Memory.memory_manager import MemoryManager
 from backend.LLM.LLM_Client import LLM_Client
@@ -25,7 +26,9 @@ logger = logging.getLogger(__name__)
 
 
 class Agent(threading.Thread):
+class Agent(threading.Thread):
     def __init__(self):
+        super().__init__()  # 调用父类的 __init__ 方法
         super().__init__()  # 调用父类的 __init__ 方法
         self.LLM_Client = LLM_Client()
         self.memory_manager = MemoryManager(self.LLM_Client)
@@ -55,6 +58,7 @@ class Agent(threading.Thread):
             # logger.info("正在创建 Agent")
             # 创建事件循环并运行异步任务
             asyncio.run(self.main_loop())
+            asyncio.run(self.main_loop())
         except Exception as e:
             logger.error(f"Error starting Agent: {str(e)}")
             self.stop()
@@ -67,6 +71,9 @@ class Agent(threading.Thread):
         system_prompt = self.prompt_manager.get_system_prompt(related_memories, context, self.current_state)        
         user_prompt = self.prompt_manager.get_user_prompt(message)        
         response = await self.LLM_Client.chat(system_prompt = system_prompt, user_input = user_prompt, enable_search=True)
+        system_prompt = self.prompt_manager.get_system_prompt(related_memories, context, self.current_state)        
+        user_prompt = self.prompt_manager.get_user_prompt(message)        
+        response = await self.LLM_Client.chat(system_prompt = system_prompt, user_input = user_prompt, enable_search=True)
         self.memory_manager.add_conversation(message, response)
         return response
 
@@ -74,6 +81,25 @@ class Agent(threading.Thread):
         """更新Agent状态"""
         old_state = self.current_state
         self.current_state = new_state
+        print(f"Agent状态更新: {old_state} -> {new_state}")
+        
+
+
+    def stop(self):
+        """停止Agent,停止所有线程"""
+        logger.info("开始关闭服务...")
+        try:
+            loop = asyncio.get_running_loop()  # 获取当前事件循环
+            tasks = asyncio.all_tasks(loop)  # 获取所有正在运行的任务
+            for task in tasks:  # 取消所有任务
+                task.cancel()
+            sys.exit(0)
+        except RuntimeError as e:
+            if "no running event loop" in str(e):
+                logger.info("事件循环已关闭，无需额外操作")
+            else:
+                logger.error(f"停止服务时发生异常: {str(e)}")
+        logger.info("所有服务已停止")
         print(f"Agent状态更新: {old_state} -> {new_state}")
         
 

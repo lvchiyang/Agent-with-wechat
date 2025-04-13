@@ -5,6 +5,8 @@ openai
 pypinyin
 lancedb
 numpy
+lancedb
+numpy
 requests>=2.31.0
 qrcode
 pyyaml
