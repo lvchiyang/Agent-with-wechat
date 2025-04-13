@@ -7,6 +7,7 @@ from backend.LLM.prompt_manager import PromptManager
 from backend.Agent.plan import Plan
 import asyncio
 import threading
+from backend.channel.api_server import APIServer
 '''
 # Agent需要的变量：
 
@@ -30,23 +31,22 @@ class Agent(threading.Thread):
         self.memory_manager = MemoryManager(self.LLM_Client)
         self.prompt_manager = PromptManager()
         self.new_message = asyncio.Event()  
-        self.chat_server = ChatServer(self.handle_message,self.new_message)
+        # self.chat_server = ChatServer(self.handle_message,self.new_message)
         self.current_state = "idle"  # 添加当前状态
         self.plan = Plan(self.update_state, self.memory_manager, self.LLM_Client) # 传递memory实例给Plan
 
 
     async def _run_server_in_thread(self):
         """
-        在后台线程中运行 Uvicorn 服务器
+        在后台线程中运行服务器
         """
+        self.api_server = APIServer(self.handle_message, self.new_message)
         loop = asyncio.get_running_loop()
-        await loop.run_in_executor(None, self.chat_server.run_server)  # 使用线程池运行阻塞式函数
+        await loop.run_in_executor(None, self.api_server.run_server)
 
     async def main_loop(self):  # 主事件循环
         await asyncio.gather(
-            self.chat_server.message_processor(),
             self._run_server_in_thread(),
-            self.chat_server.init_gewechat_channel(),
             self.plan.plan_loop()
         )
 

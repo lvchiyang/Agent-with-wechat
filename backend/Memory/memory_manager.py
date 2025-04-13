@@ -112,13 +112,19 @@ class MemoryManager:
             # 添加上下文
             self.context.append(structured_data)
             
-            # 上下文归档逻辑
-            if len(self.context) > 8:
-                context_to_archive = self.context[:5].copy()
-                # 保留最近3条上下文
-                self.context = self.context[-3:]
-                self._archive_context(context_to_archive)
+            # # 上下文归档逻辑
+            # if len(self.context) > 8:
+            #     context_to_archive = self.context[:5].copy()
+            #     # 保留最近3条上下文
+            #     self.context = self.context[-3:]
+            #     self._archive_context(context_to_archive)
             
+            # 上下文归档逻辑
+            if len(self.context) > 2:
+                context_to_archive = self.context[:2].copy()  # 复制前2条对话记录用于归档
+                self.context.clear() # 删除所有对话记录
+                self._archive_context(context_to_archive)  # 调用归档方法将复制的对话存入数据库
+
             # 添加日志记录
             logger.info(f"成功添加对话记录")
             return True
@@ -177,7 +183,7 @@ class MemoryManager:
             table_name = self.chroma_db.name_to_pinyin(name)
 
             # 检查表是否存在
-            # if table_name not in self.lance_db.list_tables():
+            # if table_name not in self.lance_db.list_tables():       
             if table_name not in self.chroma_db.list_collections():
                 logger.info(f"记忆中尚且没有和{name}相关的信息")
                 return [{"记忆中尚且没有相关信息"}]

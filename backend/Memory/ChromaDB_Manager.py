@@ -36,8 +36,9 @@ class ChromaDBManager:
     
     # 由客户端，管理集合
     def list_collections(self) -> List[str]:
-        """列出所有集合"""
-        return self.client.list_collections()
+        """列出所有集合的名称"""
+        collections = self.client.list_collections()
+        return [col.name for col in collections]
 
     def open_or_create_collection(self, name: str) -> chromadb.Collection:
         """获取集合对象"""
@@ -153,17 +154,29 @@ class ChromaDBManager:
         collection.delete(ids=[f"{id}"])
 
 def test_chromadb_manager():
-    path = "Agnet_ChromDB"
+    path = "Agent_ChromDB"
 
-    chroma_db = ChromaDBManager()
+    chroma_db = ChromaDBManager(path)
     print("已有集合",chroma_db.list_collections())
+
+
     
     try:
         # 测试集合创建
         test_collection = "nihao"
+        test_collection = chroma_db.name_to_pinyin(test_collection)
+        print(test_collection)
+
         coll = chroma_db.open_or_create_collection(test_collection)
-        print("创建集合",chroma_db.list_collections())
+        print("集合已创建或打开")
+
+        # 检查集合是否存在
+        if test_collection not in chroma_db.list_collections():
+            print("集合不存在")
+        else:
+            print("集合存在")
         
+         
         
         # 测试添加数据
         test_id = 1

@@ -1,65 +1,65 @@
-# AI女友项目
+# AI Agent项目
 
-## 项目架构
+## 项目概述
+本项目旨在构建一个基于大模型的AI Agent，支持多模型切换、角色管理和记忆管理等功能。项目还集成了RAG（Retrieval-Augmented Generation）和Agent Plan功能，以增强Agent的检索和规划能力。
 
-### 1. 后端架构
-- **大模型接口层**：将云端大模型功能解耦，支持多个模型切换
-  - 位置：backend/bot/下的不同文件夹
-  - 统一LLM API接口供Agent调用
-  - 当前支持：阿里通义千问，可扩展其他模型
+## 项目结构
+- `backend/`: 后端代码
+  - `LLM/`: 大模型接口层
+  - `Agent/`: Agent主进程
+  - `Memory/`: 记忆管理模块
+  - `config/`: 配置文件
+- `frontend/`: 前端代码
+  - `web.html`: 前端界面
+- `README.md`: 项目说明文档
+- `requirements.txt`: 依赖列表
 
-- **Agent主进程**：backend/Agent
-  - 监听9001端口
-  - 处理前端WebSocket连接
-  - 调用LLM并返回结果
-  - 集成角色管理、情感分析、记忆管理等模块
+## 项目功能
+- **RAG（Retrieval-Augmented Generation）**：
+  - 通过检索增强生成，结合外部知识库和上下文信息，提升Agent的回答质量和准确性。
+  - 支持动态检索和实时更新知识库。
 
-- **核心模块**
-  - 角色管理：管理AI女友人设 (backend/character)
-  - 情感分析：分析用户情绪 (backend/modules/emotion_analyzer.py)
-  - 记忆管理：维护对话历史 (backend/modules/memory_manager.py)
+- **Plan功能**：
+  - 提供任务规划和执行能力。
 
-### 2. 前端架构
-- 简单的对话界面
-- WebSocket实时通信
-- 位置：frontend/index.html
+- **Agent 执行**：
+  - 下一步要使用MCP，使Agent具有更强的能力。
+  
 
 ## 快速开始
 
-### 1. 配置
-编辑 backend/config/settings.yaml:
-yaml
+### 1. 配置 (默认即可)
+```yaml
 llm:
-active: ali_qwen # 选择使用的模型
-params:
-ali_qwen:
-api_key: "your_api_key"
-
+  active: ali_qwen # 选择使用的模型
+  params:
+    ali_qwen:
+      api_key: "your_api_key"
+```
 
 ### 2. 启动服务
-bash
+```bash
 cd backend
-python main.py
-
+python Agent_hall.py
+```
 
 ### 3. 访问前端
-打开 frontend/index.html
+打开 `frontend/web.html`
+
+## 依赖安装
+在启动项目前，请确保已安装所有依赖：
+```bash
+pip install -r requirements.txt
+```
 
 ## 后续规划
 1. 完善角色系统
-2. 添加情感分析
+2. MCP服务
 3. 实现长期记忆
 4. 支持多模态交互
 
-## 项目结构
-Agent-with-wechat/
-├── backend/ # 后端代码
-│ ├── Agent/ # Agent主程序
-│ ├── config/ # 配置文件
-│ ├── character/ # 角色设定
-├── frontend/ # 前端代码
-└── requirements.txt # 依赖列表
+## 贡献指南
+欢迎贡献代码！请先阅读[贡献指南](CONTRIBUTING.md)。
 
-## 依赖安装
-
-在启动项目前，请确保已安装所有依赖：
+## 许可证
+本项目采用 [MIT 许可证](LICENSE)。

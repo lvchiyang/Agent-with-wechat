@@ -192,40 +192,39 @@
         }
 
         // 创建WebSocket连接
-        const ws = new WebSocket('ws://localhost:9001/chat');
+        const ws = new WebSocket('ws://localhost:8000/ws');
         
-        ws.onopen = () => {
-            appendMessage('系统', '连接成功！', 'bot-message');
+        ws.onopen = function() {
+            console.log('WebSocket连接已建立');
+            appendMessage('系统', '已连接到服务器', 'bot-message');
         };
         
-        ws.onmessage = (event) => {
-            try {
-                const response = JSON.parse(event.data);
-                if (response.type === 'system') {
-                    appendMessage('系统', response.message, 'bot-message');
-                } else if (response.type === 'message') {
-                    appendMessage('小爱', response.text, 'bot-message');
-                }
-            } catch (e) {
-                console.error('消息解析错误:', e);
-                appendMessage('系统', '收到无法解析的消息', 'bot-message');
+        ws.onmessage = function(event) {
+            const response = JSON.parse(event.data);
+            if (response.type === 'response') {
+                appendMessage('AI助手', response.content, 'bot-message');
             }
         };
-        
-        ws.onerror = (error) => {
+
+        ws.onerror = function(error) {
             console.error('WebSocket错误:', error);
-            appendMessage('系统', '连接错误！', 'bot-message');
+            appendMessage('系统', '连接发生错误，请刷新页面重试', 'bot-message');
+        };
+
+        ws.onclose = function() {
+            console.log('WebSocket连接已关闭');
+            appendMessage('系统', '连接已断开，请刷新页面重试', 'bot-message');
         };
 
         // 发送消息
         function sendMessage() {
             const message = {
-                id: Date.now().toString(),
+                id: Date.now().toString(),  // 使用时间戳作为临时id
                 category: document.getElementById('chatType').value,
                 friend_name: document.getElementById('friendName').value,
-                group_name: document.getElementById('groupName').value || null,
+                group_name: document.getElementById('chatType').value === '群聊' ? document.getElementById('groupName').value : null,
                 text: document.getElementById('messageInput').value,
-                image: null
+                image: null  // 设置为 null 而不是 "null"
             };
             
             if (message.text.trim() && ws.readyState === WebSocket.OPEN) {
