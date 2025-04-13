@@ -2,7 +2,7 @@
 # frontend
 
 # Backend specific
-**/_pycache_/
+**/__pycache__/
 backend/Memory/lancedb_data
 backend/Memory/Agent1_LanceDB
 backend/LLM/other
