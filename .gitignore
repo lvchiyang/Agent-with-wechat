@@ -2,6 +2,7 @@
 # frontend
 
 # Backend specific
+*.pyc
 **/__pycache__/
 backend/Memory/lancedb_data
 backend/Memory/Agent1_LanceDB
