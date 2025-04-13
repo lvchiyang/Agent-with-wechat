@@ -4,6 +4,7 @@ from typing import List, Dict, Optional
 from chromadb.api.types import Documents, EmbeddingFunction, Embeddings
 from pypinyin import pinyin, Style
 import logging
+import os
 
 logger = logging.getLogger(__name__)
 
@@ -21,7 +22,12 @@ class RandomEmbedding(EmbeddingFunction):
 class ChromaDBManager:
     def __init__(self, path: str, embedding_dim: int = 1024):
         """初始化数据库连接"""
-        self.client = chromadb.PersistentClient(path=path)
+        self.client = chromadb.PersistentClient(
+            path=path,
+            settings=chromadb.Settings(
+                num_threads=min(4, os.cpu_count() or 4)  # 限制最大线程数为4或CPU核心数中的较小值
+            )  
+        )
         self.embedding_fn = RandomEmbedding(dimension=embedding_dim)
         self.collection = None
         self.current_collection_name = None
