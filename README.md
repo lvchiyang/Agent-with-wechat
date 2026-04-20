@@ -1,65 +1,108 @@
-# AI Agent项目
+# Agent-with-WeChat
 
-## 项目概述
-本项目旨在构建一个基于大模型的AI Agent，支持多模型切换、角色管理和记忆管理等功能。项目还集成了RAG（Retrieval-Augmented Generation）和Agent Plan功能，以增强Agent的检索和规划能力。
+基于大模型的微信聊天 Agent。项目实现了消息接入、记忆检索、角色化回复和任务规划的完整闭环，可用于构建具备长期记忆能力的对话系统。
 
-## 项目结构
-- `backend/`: 后端代码
-  - `LLM/`: 大模型接口层
-  - `Agent/`: Agent主进程
-  - `Memory/`: 记忆管理模块
-  - `config/`: 配置文件
-- `frontend/`: 前端代码
-  - `web.html`: 前端界面
-- `README.md`: 项目说明文档
-- `requirements.txt`: 依赖列表
+## 核心能力
 
-## 项目功能
-- **RAG（Retrieval-Augmented Generation）**：
-  - 通过检索增强生成，结合外部知识库和上下文信息，提升Agent的回答质量和准确性。
-  - 支持动态检索和实时更新知识库。
+- **微信消息接入**：通过 GeWeChat 回调接收消息，支持私聊与群聊（前缀触发）处理。
+- **多入口交互**：提供 FastAPI + WebSocket 服务，可从微信通道或前端输入统一进入 Agent。
+- **RAG 记忆增强**：对话向量化归档到 ChromaDB，并在回复前做相似记忆召回。
+- **角色化回复**：支持角色设定、语气设定、上下文拼接与状态感知 Prompt 生成。
+- **Plan 规划循环**：周期性调用 LLM 生成结构化计划，执行工作/休闲/总结等动作。
+- **每日记忆总结**：按天提取关键对话信息并回写到记忆库，持续更新用户画像。
 
-- **Plan功能**：
-  - 提供任务规划和执行能力。
+## 系统架构
 
-- **Agent 执行**：
-  - 下一步要使用MCP，使Agent具有更强的能力。
-  
+```text
+消息输入(微信回调/WebSocket)
+        |
+        v
+   Agent.handle_message
+        |
+        +--> MemoryManager.new_message (上下文切换)
+        +--> MemoryManager.query_context (相似记忆召回)
+        +--> PromptManager.get_system_prompt / get_user_prompt
+        +--> LLM_Client.chat
+        +--> MemoryManager.add_conversation (对话归档)
+```
+
+并行后台任务：
+
+- `Plan.plan_loop`：定时获取计划并更新 Agent 状态
+- `MemoryManager.daily_summary`：按天总结并更新长期记忆
+
+## 目录结构
+
+```text
+backend/
+  Agent/                  # Agent 主流程与计划模块
+  LLM/                    # 模型抽象层与具体实现（Aliyun/Qwen）
+  Memory/                 # 记忆管理与向量数据库管理
+  channel/                # 微信通道与 API/WebSocket 服务
+  config/                 # 人设、模型、微信配置
+frontend/
+  src/                    # 前端消息交互示例
+module_test/              # 模块测试脚本
+Agent_hall.py             # 启动入口
+```
 
 ## 快速开始
 
-### 1. 配置 (默认即可)
-```yaml
-llm:
-  active: ali_qwen # 选择使用的模型
-  params:
-    ali_qwen:
-      api_key: "your_api_key"
-```
+### 1) 安装依赖
 
-### 2. 启动服务
-```bash
-cd backend
-python Agent_hall.py
-```
-
-### 3. 访问前端
-打开 `frontend/web.html`
-
-## 依赖安装
-在启动项目前，请确保已安装所有依赖：
 ```bash
 pip install -r requirements.txt
 ```
 
-## 后续规划
-1. 完善角色系统
-2. MCP服务
-3. 实现长期记忆
-4. 支持多模态交互
+### 2) 配置模型与通道
 
-## 贡献指南
-欢迎贡献代码！请先阅读[贡献指南](CONTRIBUTING.md)。
+编辑以下配置文件：
 
-## 许可证
-本项目采用 [MIT 许可证](LICENSE)。
+- `backend/config/settings.yaml`：配置模型与 API Key
+- `backend/config/gewe_config.yaml`：配置 GeWeChat 服务地址与回调地址
+- `backend/config/persona_config.yaml`：配置角色人设与语气风格
+
+### 3) 启动
+
+在项目根目录执行：
+
+```bash
+python Agent_hall.py
+```
+
+### 4) 连接与交互
+
+- 微信通道：确保 GeWeChat 服务可用并完成登录
+- 前端调试：可使用 `frontend/` 下页面或通过 WebSocket 连接服务进行测试
+
+## 关键模块说明
+
+- `backend/Agent/Agent_class.py`  
+  Agent 主线程：调度消息处理、调用 LLM、更新记忆，并与 API 服务/计划循环并行运行。
+
+- `backend/Memory/memory_manager.py`  
+  负责上下文缓存、对话归档、向量检索、每日总结。
+
+- `backend/Memory/ChromaDB_Manager.py`  
+  ChromaDB 的集合管理、向量写入、检索和更新封装。
+
+- `backend/LLM/LLM_Client.py`  
+  统一大模型接口层，封装对话与 embedding 调用。
+
+- `backend/channel/gewechat/gewe_channel.py`  
+  微信登录、回调连接、消息解析、消息发送。
+
+## 当前状态与后续计划
+
+当前已完成：
+
+- 微信接入与消息处理主链路
+- 记忆检索增强（RAG）与角色化回复
+- 计划调度与每日记忆总结基础能力
+
+后续计划：
+
+1. 完善长期记忆策略（分层记忆与更细粒度归档）
+2. 优化前端交互体验与会话管理
+3. 接入更多工具能力（如 MCP）
+4. 扩展多模态输入能力（图像/语音等）
